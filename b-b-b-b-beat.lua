@@ -1,7 +1,7 @@
 --
 -- B-B-B-B-Beat
--- 0.0.3
--- llllllll.co/t/xxx
+-- 0.0.4
+-- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
 -- K3    Randomize params
@@ -21,14 +21,15 @@
 
 
 local mathh = include("lib/math_helper")
+local passthrough = include("lib/passthrough")
 
 
 -- constants
-local VERSION = "0.0.3"
+local VERSION = "0.0.4"
 local FIRST_PAGE = 0
 local LAST_PAGE = 3
-local OFF = 2
-local ON = 10
+local OFF = 3
+local ON = 15
 
 local VIEWPORT = {
   width = 128,
@@ -58,6 +59,12 @@ local BAR_VALS = {
   { str = "4", value = 4, ppq = 0.0625 },        -- [14]
 }
 
+-- Norns params menu doesn't like complicated objects for params:add_option
+local BAR_VALS_STR = {}
+for i = 1, #BAR_VALS do
+  BAR_VALS_STR[i] = BAR_VALS[i].str
+end
+
 -- defaults
 local bpm = 60
 local grid_index = 10 -- init/default: 1/2 note
@@ -67,10 +74,11 @@ local interval_index = 12 -- init/default: 2 bars
 local beat_div = BAR_VALS[grid_index].value
 local div_sum = 0
 local loop_len = 0
+local update_id
 
 --
 local update_tempo = true
-local update_chance = true
+local update_chance = false
 local update_stutter = false
 local update_variation = false
 local update_glitch = false
@@ -83,12 +91,14 @@ local function rand(param_pct, mult)
   return math.floor(math.random() * (param_pct / 100) * (mult or 10))
 end
 
+
 -- Flip a given boolean bit... randomaly
 -- param_pct: param value (should generate value 0 - 100)
 -- val: the value to flip given boolean value 
 local function rand_occurence(param_pct, val)
   local r = math.random()
   local bool_val = not val
+
   if (r < param_pct / 100) then
     bool_val = val
   end
@@ -96,11 +106,12 @@ local function rand_occurence(param_pct, val)
   return bool_val
 end
 
+
 -- Clock update sync, fires at beat_div interval
 local function update()
   while true do
     -- randomize occurance booleans
-    update_chance = rand_occurence(params:get("chance"), false)
+    update_chance = rand_occurence(params:get("chance"), true)
     if (params:get("variation") > 0) then
       update_variation = rand_occurence(params:get("chance"), true)
     end
@@ -120,18 +131,20 @@ local function update()
 
     -- disable record
     if (div_sum == 0) then --BAR_VALS[params:get("interval")].value) then
-      audio.level_adc(0.0) -- set input volume 0
+      -- print("disable record", update_chance)
+      audio.level_adc(0) -- set input volume 0
 
       for voice = 1, 2 do
-        softcut.rec(voice, 0.0) -- disable recording
-        softcut.rec_level(voice, 0.0) -- voice recording level 0
+        softcut.rec(voice, 0) -- disable recording
+        softcut.rec_level(voice, 0) -- voice recording level 0
       end
     end
-
+    
     div_sum = div_sum + beat_div
 
     -- reenable record
-    if (div_sum > BAR_VALS[params:get("interval")].value) then
+    if (div_sum >= BAR_VALS[params:get("interval")].value) then
+      -- print("reenable record", update_chance)
       softcut.buffer_clear()
       audio.level_adc(1.0) -- set input volume 1.0
 
@@ -144,14 +157,18 @@ local function update()
       div_sum = 0
     end
 
+
     -- Chance
     if update_chance then
       for voice = 1, 2 do
-        softcut.level(voice, 1.0)
+        -- softcut.level(voice, 1.0)
+        softcut.play(voice, 1)
       end
+      -- audio.level_adc(0)
     else
       for voice = 1, 2 do
-        softcut.level(voice, 0)
+        -- softcut.level(voice, 0)
+        softcut.play(voice, 0)
       end
       audio.level_adc(1.0)
     end
@@ -161,28 +178,24 @@ local function update()
     --   engine.play(1)
       for voice = 1, 2 do
         softcut.position(voice, (math.random() * loop_len))
-        softcut.rate(voice, (math.random() * mathh.random(-2 - params:get("variation"), 2 + params:get("variation"))))
+        softcut.rate(voice, (math.random() * mathh.random(-params:get("glitch") / 10, params:get("glitch") / 10)))
       end
     else
     --   engine.play(0)
     end
 
     if update_stutter then
-      for voice = 1, 2 do
-        softcut.level(voice, 0)
-      end
-      audio.level_adc(0)
+      -- audio.level_adc(0)
+      audio.level_cut(0)
     else
-      for voice = 1, 2 do
-        softcut.level(voice, 1.0)
-      end
       -- audio.level_adc(1.0)
+      audio.level_cut(1.0)
     end
 
     redraw()
 
     -- reset occurance booleans to default
-    update_chance = true
+    update_chance = false
     update_stutter = false
     update_variation = false
     update_glitch = false
@@ -231,29 +244,16 @@ local function init_params()
   params:add_separator()
 
   -- loop duration (Beat Repeat: interval)
-  params:add{
-    type = "option",
-    id = "interval",
-    name = "Interval",
-    options = BAR_VALS,
-    default = interval_index,
-    action = update_interval
-  }
+  params:add_option("interval", "Interval", BAR_VALS_STR, interval_index)
+  params:set_action("interval", update_interval)
 
   -- clock division (Beat Repeat: grid)
-  params:add{
-    type = "option",
-    id = "grid",
-    name = "Grid",
-    options = BAR_VALS,
-    default = grid_index,
-    action = update_grid
-  }
+  params:add_option("grid", "Grid", BAR_VALS_STR, grid_index)
+  params:set_action("grid", update_grid)
 
   -- prabability of repeat happening (e.g. softcut or passthrough) (Beat Repeat: chance)
-  params:add_number("chance", "Chance", 0, 100, 0)
-  params:set_action("chance",
-    function(val)
+  params:add_number("chance", "Chance", 0, 100, 100)
+  params:set_action("chance", function(val)
       if (val <= 0) then
         update_stutter = false
       end
@@ -264,14 +264,13 @@ local function init_params()
 
   -- prabability of glitch
   params:add_number("glitch", "Glitch", 0, 100, 0)
-  params:set_action("glitch",
-    function(val)
+  params:set_action("glitch", function(val)
       if (val <= 0) then
         update_glitch = false
       end
     end)
 
-  params:set("clock_source", 3) -- sets source to "Link" by default
+  -- params:set("clock_source", 3) -- sets source to "Link" by default
 
   params:add_number("bpm", "bpm", 1, 300, bpm) -- norns.state.clock.tempo)
   params:set_action("bpm",
@@ -305,13 +304,11 @@ end
 
 -- Init Softcut
 local function init_softcut()
-  print("softcut")
-
   audio.level_adc(1.0) -- input volume 1.0
-  -- audio.level_adc(0.0) -- input volume 0
+  -- audio.level_adc(0) -- input volume 0
 	audio.level_adc_cut(1) -- ADC to Softcut input
 	audio.level_cut(1.0) -- Softcut master level (same as in LEVELS screen)
-	audio.level_cut_rev(0.0)
+	audio.level_cut_rev(0)
 
   softcut.buffer_clear() -- clear Softcut buffer
 
@@ -341,6 +338,24 @@ local function init_softcut()
 end
 
 
+-- Midi event, fires when Midi data receieved
+function midi_device_event(data)
+  local msg = midi.to_msg(data)
+
+  if msg.type == "clock" then
+  end
+
+  redraw()
+end
+
+
+-- Initialize Midi
+function init_midi()
+  passthrough.init()
+  passthrough.user_device_event = midi_device_event
+end
+
+
 -- I-I-I-I-Init
 function init()
   print("b-b-b-b-beat v" .. VERSION)
@@ -349,6 +364,7 @@ function init()
     FIRST_PAGE = 1
   end
 
+  init_midi()
   init_params()
   init_softcut()
 
@@ -502,6 +518,7 @@ function redraw()
   local str = BAR_VALS[params:get("interval")].str
   screen.level(OFF)
   screen.rect(5, bar_y, bar_w, bar_h + 1)
+  screen.level(OFF - 2)
   for i = 1, 3 do
     screen.move(5 + (bar_w / 4) * i, bar_y * glitch_shift_px())
     screen.line(5 + (bar_w / 4) * i, (bar_y + bar_h) * glitch_shift_px())

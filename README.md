@@ -59,6 +59,10 @@ $ git merge origin/primary
 
 
 ## Changelog
-
+- v0.0.4 
+    - Fixed params bug; params:add_option
+    - Fixed "Chance" param; default 100%
+    - Added Midi passthrough
+    - Enabled param reading/writing
 - v0.0.3 Initial release
 
