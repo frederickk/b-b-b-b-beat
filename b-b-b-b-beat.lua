@@ -1,6 +1,6 @@
 --
 -- B-B-B-B-Beat
--- 0.0.4
+-- 0.0.5
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
@@ -10,14 +10,14 @@
 -- E4    BPM [Fates only]
 -- E2-E3 Adjust highlight params
 --
--- S-S-S-S-Stutter and 
+-- S-S-S-S-Stutter and
 -- G-G-G-Glitch till your
 -- hearts content
 --
 -- See README for more details
 --
 
--- engine.name = "Glitch"
+engine.name = "Glitch"
 
 
 local mathh = include("lib/math_helper")
@@ -25,7 +25,7 @@ local passthrough = include("lib/passthrough")
 
 
 -- constants
-local VERSION = "0.0.4"
+local VERSION = "0.0.5"
 local FIRST_PAGE = 0
 local LAST_PAGE = 3
 local OFF = 3
@@ -82,6 +82,7 @@ local update_chance = false
 local update_stutter = false
 local update_variation = false
 local update_glitch = false
+local metro_pos = false
 
 
 -- Generates random integer value
@@ -94,8 +95,8 @@ end
 
 -- Flip a given boolean bit... randomaly
 -- param_pct: param value (should generate value 0 - 100)
--- val: the value to flip given boolean value 
-local function rand_occurence(param_pct, val)
+-- val: the value to flip given boolean value
+local function rand_occurrence(param_pct, val)
   local r = math.random()
   local bool_val = not val
 
@@ -111,12 +112,12 @@ end
 local function update()
   while true do
     -- randomize occurance booleans
-    update_chance = rand_occurence(params:get("chance"), true)
+    update_chance = rand_occurrence(params:get("chance"), true)
     if (params:get("variation") > 0) then
-      update_variation = rand_occurence(params:get("chance"), true)
+      update_variation = rand_occurrence(params:get("chance"), true)
     end
-    update_glitch = rand_occurence(params:get("glitch"), true)
-    update_stutter = rand_occurence(params:get("glitch"), true)
+    update_glitch = rand_occurrence(params:get("glitch"), true)
+    update_stutter = rand_occurrence(params:get("glitch"), true)
 
     -- Variation
     if update_variation then
@@ -139,7 +140,7 @@ local function update()
         softcut.rec_level(voice, 0) -- voice recording level 0
       end
     end
-    
+
     div_sum = div_sum + beat_div
 
     -- reenable record
@@ -161,30 +162,40 @@ local function update()
     -- Chance
     if update_chance then
       for voice = 1, 2 do
-        -- softcut.level(voice, 1.0)
-        softcut.play(voice, 1)
+        softcut.level(voice, 1.0)
+        -- softcut.play(voice, 1)
       end
       -- audio.level_adc(0)
     else
       for voice = 1, 2 do
         -- softcut.level(voice, 0)
-        softcut.play(voice, 0)
+        -- softcut.play(voice, 0)
       end
       audio.level_adc(1.0)
     end
 
     -- Glitch
     if update_glitch then
-    --   engine.play(1)
       for voice = 1, 2 do
         softcut.position(voice, (math.random() * loop_len))
-        softcut.rate(voice, (math.random() * mathh.random(-params:get("glitch") / 10, params:get("glitch") / 10)))
+        softcut.rate(voice, ((math.random() * 2) * mathh.random(-params:get("glitch") / 10, params:get("glitch") / 10)))
       end
+
+      if (params:get("glitch_noise") == 1 and not update_stutter) then
+        local lfo_vol = mathh.random(1, 8)
+        local cutoff = mathh.random_int(4000, 10000)
+        local amp = mathh.random(0.01, 0.2)
+
+      	engine.lfoVol(lfo_vol)
+	    	engine.cutoff(cutoff)
+	    	engine.amp(amp)
+        engine.play()
+		  end
     else
-    --   engine.play(0)
+      engine.stop()
     end
 
-    if update_stutter then
+    if (params:get("glitch_stutter") == 1 and update_stutter) then
       -- audio.level_adc(0)
       audio.level_cut(0)
     else
@@ -270,8 +281,12 @@ local function init_params()
       end
     end)
 
-  -- params:set("clock_source", 3) -- sets source to "Link" by default
+  -- glitchy params
+  params:add_option("glitch_noise", "Glitch noise", {"yes", "no"}, 1)
+  params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 1)
+  params:add_option("glitch_stutter", "Glitch stutter", {"yes", "no"}, 2)
 
+  -- event wrapper (of sorts) for setting global BPM
   params:add_number("bpm", "bpm", 1, 300, bpm) -- norns.state.clock.tempo)
   params:set_action("bpm",
     function(val)
@@ -293,12 +308,15 @@ end
 
 
 -- Randomize parameter values
-function randomize_params() 
+function randomize_params()
   params:set("interval", mathh.random_int(1, #BAR_VALS))
   params:set("grid", mathh.random_int(1, #BAR_VALS))
   params:set("chance", mathh.random_int(0, 100))
   params:set("variation", mathh.random_int(0, 10))
   -- params:set("glitch", mathh.random_int(0, 100))
+  -- params:set("glitch_noise", mathh.random_int(1, 2))
+  -- params:set("glitch_ui", mathh.random_int(1, 2))
+  -- params:set("glitch_stutter", mathh.random_int(1, 2))
 end
 
 
@@ -308,7 +326,8 @@ local function init_softcut()
   -- audio.level_adc(0) -- input volume 0
 	audio.level_adc_cut(1) -- ADC to Softcut input
 	audio.level_cut(1.0) -- Softcut master level (same as in LEVELS screen)
-	audio.level_cut_rev(0)
+  audio.level_cut_rev(0) -- Softcut reverb level 0
+  audio.level_eng_rev(0) -- Engine reverb level 0
 
   softcut.buffer_clear() -- clear Softcut buffer
 
@@ -394,7 +413,7 @@ function enc(index, delta)
       params:delta("bpm", delta)
     end
   else
-    -- Norns; pitch only on page 0
+    -- Norns; BPM only on page 0
     if params:get("page") == 0 then
       if index == 2 then
         params:delta("bpm", delta)
@@ -451,28 +470,15 @@ local function highlight(on, off, page_nums)
 end
 
 
--- Generates random pixel noise
--- density: {number} low number = more, high number = less
--- level: {number} brightness of pixel; 0 = black, 15 = white
-local function glitch_pixels(density, level)
-  if level == nil then level = 15 end
-  screen.level(level)
-
-  for x = 1, VIEWPORT.width do
-    for y = 1, VIEWPORT.height do
-      if (math.floor(math.random() * density) == 0) then
-        screen.fill()
-        screen.pixel(x, y)
-      end
-    end
-  end
-end
-
-
 -- Returns px value for shifting UI
 local function glitch_shift_px()
-  local glitch_val = math.random() * (params:get("glitch") / 100)
-  return (1 + (mathh.random(-1, 3) * glitch_val))
+  if (params:get("glitch_ui") == 1) and update_glitch then
+    local glitch_val = math.random() -- * (params:get("glitch") / 100)
+
+    return (1 + (mathh.random(-1, 0) * (glitch_val / 4)))
+  end
+
+  return 1
 end
 
 
@@ -490,6 +496,24 @@ local function signal(x, y, state)
 end
 
 
+-- Creates icon to show beat relative to interval
+-- Thenk you @itsyourbedtime for creating this for Takt!
+-- x: X-coordinate of element
+-- y: Y-coordinate of element
+local function metro_icon(x, y)
+  screen.move(x + 2, y + 5)
+  screen.line(x + 7, y)
+  screen.line(x + 12, y + 5)
+  screen.line(x + 3, y + 5)
+  screen.stroke()
+  screen.move(x + 7, y + 3)
+  screen.line(metro_pos and (x + 4) or (x + 10), y )
+  screen.stroke()
+
+  if (div_sum == 0) then metro_pos = not metro_pos end
+end
+
+
 -- Screen handler
 function redraw()
   screen.clear()
@@ -499,17 +523,24 @@ function redraw()
   local bar_w = VIEWPORT.width - 10
   local bar_h = 10
 
-  -- BPM
-  signal(5, 10 * glitch_shift_px() , update_tempo)
-  screen.move(10 * glitch_shift_px(), 12 * glitch_shift_px() )
-  screen.text(params:get("clock_tempo"))
-
   -- Page marker
   screen.move((VIEWPORT.width - 13) * glitch_shift_px(), 12)
   screen.text_center("P" .. params:get("page"))
   screen.line_width(1)
   screen.rect(VIEWPORT.width - 10 - 9, 12 - 6, 15, 8)
   screen.stroke()
+
+  -- BPM
+  page = 0
+  if (#norns.encoders.accel == 4) then
+    screen.level(ON)
+  else
+    highlight(ON, OFF, {page})
+  end
+  metro_icon(10 * glitch_shift_px(), 8 * glitch_shift_px())
+  signal(5, 10 * glitch_shift_px(), update_tempo)
+  screen.move(25 * glitch_shift_px(), 12 * glitch_shift_px())
+  screen.text(params:get("clock_tempo"))
 
   page = 1
 
