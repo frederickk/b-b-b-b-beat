@@ -1,6 +1,6 @@
 --
 -- B-B-B-B-Beat
--- 0.0.5
+-- 0.7.1
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
@@ -11,36 +11,14 @@
 -- E2-E3 Adjust highlight params
 --
 -- S-S-S-S-Stutter and
--- G-G-G-Glitch till your
+-- g-g-g-g-glitch till your
 -- hearts content
 --
 -- See README for more details
 --
 
-engine.name = "Glitch"
-
-
-local mathh = include("lib/math_helper")
-local passthrough = include("lib/passthrough")
-
-
--- constants
-local VERSION = "0.0.5"
-local FIRST_PAGE = 0
-local LAST_PAGE = 3
-local OFF = 3
-local ON = 15
-
-local VIEWPORT = {
-  width = 128,
-  height = 64,
-  center = 64,
-  middle = 32,
-  padding = {
-    x = 10,
-    y = 15
-  }
-}
+--- constants
+local VERSION = "0.7.1"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256, ppq = 64 },  -- [1]
@@ -65,37 +43,37 @@ for i = 1, #BAR_VALS do
   BAR_VALS_STR[i] = BAR_VALS[i].str
 end
 
+
+local mathh = include("lib/math_helper")
+local passthrough = include("lib/passthrough")
+local ui = include("core/ui")
+
+local grid = include("core/grid")
+grid.name = "Grid"
+grid.index = 10 -- init/default: 1/2 note
+
+local interval = include("core/grid")
+interval.name = "Interval"
+interval.index = 12 -- init/default: 2 bars
+
 -- defaults
 local bpm = 60
-local grid_index = 10 -- init/default: 1/2 note
-local interval_index = 12 -- init/default: 2 bars
 
--- Clock update vars
-local beat_div = BAR_VALS[grid_index].value
-local div_sum = 0
+local beat_div = BAR_VALS[grid.index].value
 local loop_len = 0
 local update_id
 
---
+-- states
 local update_tempo = true
 local update_chance = false
 local update_stutter = false
 local update_variation = false
 local update_glitch = false
-local metro_pos = false
 
 
--- Generates random integer value
--- param_pct: param value (should generate value 0 - 100)
--- mult: multiplier; default = 10
-local function rand(param_pct, mult)
-  return math.floor(math.random() * (param_pct / 100) * (mult or 10))
-end
-
-
--- Flip a given boolean bit... randomaly
--- param_pct: param value (should generate value 0 - 100)
--- val: the value to flip given boolean value
+--- Flips a given boolean bit... randomly.
+-- @tparam param_pct {number}  param value (should generate value 0 - 100)
+-- @tparam val {number}  the value to flip given boolean value
 local function rand_occurrence(param_pct, val)
   local r = math.random()
   local bool_val = not val
@@ -107,11 +85,42 @@ local function rand_occurrence(param_pct, val)
   return bool_val
 end
 
+--- Sets loop length based on grid length and tempo.
+local function set_loop_len()
+  -- set loop length to 1 bar (or 1 second)
+  loop_len = (BAR_VALS[(grid.index or 1)].value / params:get("clock_tempo")) * 60
+  for voice = 1, 2 do
+    softcut.loop_end(voice, loop_len * 4)
+  end
+end
 
--- Clock update sync, fires at beat_div interval
+--- Starts recording into Softcut.
+local function start_rec()
+  -- print("reenable record", update_chance)
+  -- set_loop_len()
+  softcut.buffer_clear()
+  audio.level_adc(1.0) -- set input volume 1.0
+  for voice = 1, 2 do
+    softcut.position(voice, 0)
+    softcut.rec(voice, 1.0) -- enable recording
+    softcut.rec_level(voice, 1.0) -- voice recording level 1.0
+  end
+end
+
+--- Stops recording into softcut.
+local function stop_rec()
+  -- print("disable record", update_chance)
+  -- audio.level_adc(0) -- set input volume 0
+  for voice = 1, 2 do
+    softcut.rec(voice, 0) -- disable recording
+    softcut.rec_level(voice, 0) -- voice recording level 0
+  end
+end
+
+--- Handler for clock update sync, fires at `beat_div` interval.
 local function update()
   while true do
-    -- randomize occurance booleans
+    -- randomize occurrence booleans
     update_chance = rand_occurrence(params:get("chance"), true)
     if (params:get("variation") > 0) then
       update_variation = rand_occurrence(params:get("chance"), true)
@@ -119,80 +128,55 @@ local function update()
     update_glitch = rand_occurrence(params:get("glitch"), true)
     update_stutter = rand_occurrence(params:get("glitch"), true)
 
-    -- Variation
+    -- variation
     if update_variation then
       local vari = params:get("variation")
-      local vari_rand = math.floor(mathh.random(-vari, vari + 1))
-      params:delta("grid", vari_rand)
+      local vari_rand = mathh.random_int(-vari - 1, vari)
+      beat_div_vari = beat_div * vari_rand
+    else
+      beat_div_vari = 0
     end
 
-    clock.sync(beat_div)
+    clock.sync(beat_div * 4)
 
     update_tempo = not update_tempo
 
-    -- disable record
-    if (div_sum == 0) then --BAR_VALS[params:get("interval")].value) then
-      -- print("disable record", update_chance)
-      audio.level_adc(0) -- set input volume 0
-
-      for voice = 1, 2 do
-        softcut.rec(voice, 0) -- disable recording
-        softcut.rec_level(voice, 0) -- voice recording level 0
-      end
-    end
-
-    div_sum = div_sum + beat_div
-
-    -- reenable record
-    if (div_sum >= BAR_VALS[params:get("interval")].value) then
-      -- print("reenable record", update_chance)
-      softcut.buffer_clear()
-      audio.level_adc(1.0) -- set input volume 1.0
-
-      for voice = 1, 2 do
-        softcut.position(voice, 0)
-        softcut.rec(voice, 1.0) -- enable recording
-        softcut.rec_level(voice, 1.0) -- voice recording level 1.0
-      end
-
-      div_sum = 0
-    end
-
-
-    -- Chance
+    -- chance
     if update_chance then
       for voice = 1, 2 do
-        softcut.level(voice, 1.0)
-        -- softcut.play(voice, 1)
+        softcut.play(voice, 1)
       end
-      -- audio.level_adc(0)
+      audio.level_adc(0)
     else
       for voice = 1, 2 do
-        -- softcut.level(voice, 0)
-        -- softcut.play(voice, 0)
+        softcut.play(voice, 0)
       end
       audio.level_adc(1.0)
     end
 
-    -- Glitch
+    -- recording incoming audio
+    if (grid.sum >= BAR_VALS[interval.get()].value) then
+      grid.reset_sum()
+    end
+
+    if (grid.sum == 0 or grid.sum >= BAR_VALS[interval.get()].value) then
+      start_rec()
+    elseif (grid.sum >= BAR_VALS[grid.get()].value) then
+      stop_rec()
+    end
+    
+    grid.increment_sum((beat_div + beat_div_vari))
+
+    -- glitch
     if update_glitch then
       for voice = 1, 2 do
         softcut.position(voice, (math.random() * loop_len))
         softcut.rate(voice, ((math.random() * 2) * mathh.random(-params:get("glitch") / 10, params:get("glitch") / 10)))
       end
-
-      if (params:get("glitch_noise") == 1 and not update_stutter) then
-        local lfo_vol = mathh.random(1, 8)
-        local cutoff = mathh.random_int(4000, 10000)
-        local amp = mathh.random(0.01, 0.2)
-
-      	engine.lfoVol(lfo_vol)
-	    	engine.cutoff(cutoff)
-	    	engine.amp(amp)
-        engine.play()
-		  end
     else
-      engine.stop()
+      for voice = 1, 2 do
+        softcut.rate(voice, 1.0)
+      end
     end
 
     if (params:get("glitch_stutter") == 1 and update_stutter) then
@@ -205,7 +189,7 @@ local function update()
 
     redraw()
 
-    -- reset occurance booleans to default
+    -- reset occurrence booleans to default
     update_chance = false
     update_stutter = false
     update_variation = false
@@ -213,54 +197,41 @@ local function update()
   end
 end
 
+-- Handler when "grid" parameter is set.
+function grid.update(val)
+  grid.index = mathh.clamp(val, 1, interval.index)
 
--- Event fired when "grid" parameter is set
-local function update_grid(val)
-  grid_index = mathh.clamp(val, 1, interval_index)
-
-  if (val > interval_index) then
-    params:set("grid", grid_index)
+  if (val > interval.index) then
+    grid.set(grid.index)
     return
   end
 
-  beat_div = BAR_VALS[grid_index].value
-  loop_len = (BAR_VALS[grid_index].value / params:get("clock_tempo")) * 60 -- set loop length to 1 bar (or 1 second)
+  beat_div = BAR_VALS[grid.index].value
+  set_loop_len()
 
-  for voice = 1, 2 do
-    softcut.loop_end(voice, loop_len)
-  end
-
-  div_sum = 0
+  -- grid.reset_sum()
 end
 
+--- Handler when "interval" parameter is set.
+function interval.update(val)
+  interval.index = val
 
--- Event fired when "interval" parameter is set
-local function update_interval(val)
-  interval_index = val
-
-  if (interval_index < grid_index) then
-    params:set("grid", interval_index)
+  if (interval.index < grid.index) then
+    grid.set(interval.index)
   end
 
-  div_sum = 0
+  -- grid.reset_sum()
 end
 
-
--- Init/add params
+--- Init/add params.
 local function init_params()
-  -- Parameter page
-  params:add_number("page", "Page", FIRST_PAGE - 1, LAST_PAGE + 1, 1)
-  params:hide("page")
-
-  params:add_separator()
+  ui.add_page_params()
 
   -- loop duration (Beat Repeat: interval)
-  params:add_option("interval", "Interval", BAR_VALS_STR, interval_index)
-  params:set_action("interval", update_interval)
+  interval.add_params(BAR_VALS_STR, interval.index)
 
   -- clock division (Beat Repeat: grid)
-  params:add_option("grid", "Grid", BAR_VALS_STR, grid_index)
-  params:set_action("grid", update_grid)
+  grid.add_params(BAR_VALS_STR, grid.index)
 
   -- prabability of repeat happening (e.g. softcut or passthrough) (Beat Repeat: chance)
   params:add_number("chance", "Chance", 0, 100, 100)
@@ -282,18 +253,17 @@ local function init_params()
     end)
 
   -- glitchy params
-  params:add_option("glitch_noise", "Glitch noise", {"yes", "no"}, 1)
   params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 1)
   params:add_option("glitch_stutter", "Glitch stutter", {"yes", "no"}, 2)
 
-  -- event wrapper (of sorts) for setting global BPM
-  params:add_number("bpm", "bpm", 1, 300, bpm) -- norns.state.clock.tempo)
+  -- wrapper for listening to and setting global BPM
+  params:add_number("bpm", "bpm", 1, 300, bpm)
   params:set_action("bpm",
     function(val)
       bpm = val
       params:set("clock_tempo", val)
-      params:set("grid", grid_index)
-      params:set("interval", interval_index)
+      grid.set(grid.index)
+      interval.set(interval.index)
     end)
   params:hide("bpm")
 
@@ -302,32 +272,28 @@ local function init_params()
   -- trigger param defaults
   params:bang()
 
-  -- Load saved params
+  -- load saved params
   params:read()
 end
 
-
--- Randomize parameter values
+--- Randomizes parameter values.
 function randomize_params()
-  params:set("interval", mathh.random_int(1, #BAR_VALS))
-  params:set("grid", mathh.random_int(1, #BAR_VALS))
+  interval.set(mathh.random_int(1, #BAR_VALS))
+  grid.set(mathh.random_int(1, #BAR_VALS))
   params:set("chance", mathh.random_int(0, 100))
   params:set("variation", mathh.random_int(0, 10))
   -- params:set("glitch", mathh.random_int(0, 100))
-  -- params:set("glitch_noise", mathh.random_int(1, 2))
   -- params:set("glitch_ui", mathh.random_int(1, 2))
   -- params:set("glitch_stutter", mathh.random_int(1, 2))
 end
 
-
--- Init Softcut
+--- Init Softcut.
 local function init_softcut()
   audio.level_adc(1.0) -- input volume 1.0
   -- audio.level_adc(0) -- input volume 0
-	audio.level_adc_cut(1) -- ADC to Softcut input
-	audio.level_cut(1.0) -- Softcut master level (same as in LEVELS screen)
+  audio.level_adc_cut(1) -- ADC to Softcut input
+  audio.level_cut(1.0) -- Softcut master level (same as in LEVELS screen)
   audio.level_cut_rev(0) -- Softcut reverb level 0
-  audio.level_eng_rev(0) -- Engine reverb level 0
 
   softcut.buffer_clear() -- clear Softcut buffer
 
@@ -340,8 +306,7 @@ local function init_softcut()
 
     softcut.loop(voice, 1) -- voice 1 enable loop
     softcut.loop_start(voice, 0) -- voice 1 loop start @ 0.0s
-    loop_len = (BAR_VALS[1].value / params:get("clock_tempo")) * 60 -- set loop length to 1 bar (or 1 second)
-    softcut.loop_end(voice, loop_len)
+    set_loop_len()
     -- softcut.fade_time(voice, 1)
 
     softcut.position(voice, 0) -- voice 1 loop position @ 0.0s
@@ -356,32 +321,26 @@ local function init_softcut()
   end
 end
 
-
--- Midi event, fires when Midi data receieved
-function midi_device_event(data)
-  local msg = midi.to_msg(data)
-
-  if msg.type == "clock" then
-  end
-
-  redraw()
-end
-
-
--- Initialize Midi
+--- Init Midi.
 function init_midi()
   passthrough.init()
-  passthrough.user_device_event = midi_device_event
 end
 
+--- Event handler for Midi start.
+function clock.transport.start()
+--   print("clock.transport.start()")
+  grid.reset_sum() 
+end
 
--- I-I-I-I-Init
+--- Event handler for Midi stop.
+function clock.transport.stop()
+--   print("clock.transport.stop()")
+  grid.reset_sum() 
+end
+
+--- I-I-I-I-Init.
 function init()
   print("b-b-b-b-beat v" .. VERSION)
-
-  if (#norns.encoders.accel == 4) then
-    FIRST_PAGE = 1
-  end
 
   init_midi()
   init_params()
@@ -394,17 +353,12 @@ function init()
   screen.line_width(1)
 end
 
-
--- Encoder input
+--- Encoder input.
+-- @tparam index {number}  which encoder
+-- @tparam delta {number}  amount of change/turn
 function enc(index, delta)
   if index == 1 then
-    params:delta("page", delta)
-
-    if (params:get("page") > LAST_PAGE) then
-      params:set("page", FIRST_PAGE)
-    elseif (params:get("page") < FIRST_PAGE) then
-      params:set("page", LAST_PAGE)
-    end
+    ui.page_delta(delta)
   end
 
   if (#norns.encoders.accel == 4) then
@@ -414,26 +368,26 @@ function enc(index, delta)
     end
   else
     -- Norns; BPM only on page 0
-    if params:get("page") == 0 then
+    if ui.page_get() == 0 then
       if index == 2 then
         params:delta("bpm", delta)
       end
     end
   end
 
-  if params:get("page") == 1 then
+  if ui.page_get() == 1 then
     if index == 2 then
-      params:delta("interval", delta)
+      interval.delta(delta)
     elseif index == 3 then
-      params:delta("grid", delta)
+      grid.delta(delta)
     end
-  elseif params:get("page") == 2 then
+  elseif ui.page_get() == 2 then
     if index == 2 then
       params:delta("chance", delta)
     elseif index == 3 then
       params:delta("variation", delta)
     end
-  elseif params:get("page") == 3 then
+  elseif ui.page_get() == 3 then
     if index == 2 then
       params:delta("glitch", delta)
     end
@@ -442,183 +396,140 @@ function enc(index, delta)
   redraw()
 end
 
--- Key/button input
+--- Key/button input.
+-- @tparam index {number}  which button
+-- @tparam state {boolean|number}  button pressed
 function key(index, state)
   if index == 2 and state == 1 then
-    div_sum = 1000
-  elseif index == 3 and state == 1 then
-    randomize_params()
+    grid.reset_sum()
+    start_rec()
+    grid.increment_sum(beat_div)
+  -- elseif index == 3 and state == 1 then
+  --   randomize_params()
   end
 
   redraw()
 end
 
-
--- Toggles the brightness of an element based on page
--- on: brightnless level for "on" state
--- off: brightnless level for "off" state
--- page_nums: array of page numbers to toggle "on" state
-local function highlight(on, off, page_nums)
-  for i = 1, #page_nums do
-    if params:get("page") == page_nums[i] then
-      screen.level(on)
-      break
-    else
-      screen.level(off)
-    end
-  end
-end
-
-
--- Returns px value for shifting UI
+--- Returns px value for shifting UI.
 local function glitch_shift_px()
   if (params:get("glitch_ui") == 1) and update_glitch then
-    local glitch_val = math.random() -- * (params:get("glitch") / 100)
+    local glitch_val = math.random() * ((params:get("glitch") / 1000))
 
-    return (1 + (mathh.random(-1, 0) * (glitch_val / 4)))
+    return (1 + (mathh.random(-1, 1) * glitch_val))
   end
 
   return 1
 end
 
+--- Draws given param with signal and value.
+-- @tparam name {string}  Name of parameter
+-- @tparam page {number}
+-- @tparam x {number}
+-- @tparam y {number}
+-- @tparam suffix {string}  Optional suffix for display value
+-- @tparam bool {boolean}  Boolean to trigger signal
+local function draw_param(name, page, x, y, suffix, bool)
+  ui.highlight({page}, ui.ON, 0)
+  screen.move((x + 8) * glitch_shift_px() , (y + 10) * glitch_shift_px())
+  screen.text(name)
 
--- Creates activity element to signify status of parameter
--- x: X-coordinate of element
--- y: Y-coordinate of element
--- state: 1 is active, 0 is inactive
-local function signal(x, y, state)
-  local r = 3
-  screen.move(math.floor(x) + r, math.floor(y))
-  screen.circle(math.floor(x), math.floor(y), r)
-
-  if (state) then screen.fill()
-  else screen.stroke() end
+  ui.highlight({page})
+  ui.signal((x + 3) * glitch_shift_px(), y * glitch_shift_px(), bool)
+  screen.move((x + 8) * glitch_shift_px(), (y + 2) * glitch_shift_px())
+  screen.text(params:get(string.lower(name)) .. (suffix or ""))
 end
 
-
--- Creates icon to show beat relative to interval
--- Thenk you @itsyourbedtime for creating this for Takt!
--- x: X-coordinate of element
--- y: Y-coordinate of element
-local function metro_icon(x, y)
-  screen.move(x + 2, y + 5)
-  screen.line(x + 7, y)
-  screen.line(x + 12, y + 5)
-  screen.line(x + 3, y + 5)
-  screen.stroke()
-  screen.move(x + 7, y + 3)
-  screen.line(metro_pos and (x + 4) or (x + 10), y )
-  screen.stroke()
-
-  if (div_sum == 0) then metro_pos = not metro_pos end
+--- Displays string for BAR_VAL selected.
+-- @tparam index {number}  index of length value 
+function str_note_bar(index)
+  if index < 11 then screen.text("Note")
+  elseif index == 11 then screen.text("Bar")
+  else screen.text("Bars") end
 end
 
-
--- Screen handler
+--- Handler for screen redraw.
 function redraw()
-  screen.clear()
-  screen.level(ON)
+  if not update_glitch then	
+    screen.clear()
+  end
 
-  local bar_y = 25 * glitch_shift_px()
-  local bar_w = VIEWPORT.width - 10
-  local bar_h = 10
+  screen.level(ui.ON)
 
-  -- Page marker
-  screen.move((VIEWPORT.width - 13) * glitch_shift_px(), 12)
-  screen.text_center("P" .. params:get("page"))
-  screen.line_width(1)
-  screen.rect(VIEWPORT.width - 10 - 9, 12 - 6, 15, 8)
-  screen.stroke()
+  -- page marker
+  ui.page_marker(12, 8, ui.page_get(), glitch_shift_px)
 
   -- BPM
   page = 0
   if (#norns.encoders.accel == 4) then
-    screen.level(ON)
+    screen.level(ui.ON)
   else
-    highlight(ON, OFF, {page})
+    ui.highlight({page})
   end
-  metro_icon(10 * glitch_shift_px(), 8 * glitch_shift_px())
-  signal(5, 10 * glitch_shift_px(), update_tempo)
-  screen.move(25 * glitch_shift_px(), 12 * glitch_shift_px())
+  ui.metro_icon(10 * glitch_shift_px(), 5, grid.pos % 4)
+  ui.signal(5 * glitch_shift_px(), 7 * glitch_shift_px(), update_tempo)
+  screen.move(25 * glitch_shift_px(), 10 * glitch_shift_px())
   screen.text(params:get("clock_tempo"))
+
+  local bar_y = 24
+  local grid_seg_num = (interval.ui.width * BAR_VALS[interval.get()].value / (interval.ui.width * BAR_VALS[grid.get()].value))
 
   page = 1
 
-  -- interval
-  local w = bar_w * BAR_VALS[params:get("interval")].value
-  local str = BAR_VALS[params:get("interval")].str
-  screen.level(OFF)
-  screen.rect(5, bar_y, bar_w, bar_h + 1)
-  screen.level(OFF - 2)
-  for i = 1, 3 do
-    screen.move(5 + (bar_w / 4) * i, bar_y * glitch_shift_px())
-    screen.line(5 + (bar_w / 4) * i, (bar_y + bar_h) * glitch_shift_px())
+  -- interval length marker(s)
+  local str = BAR_VALS[interval.get()].str
+  local w = interval.ui.width * BAR_VALS[interval.get()].value
+  local x = 2
+  local y = bar_y - 3
+
+  screen.level(ui.OFF)
+  interval.draw(x, bar_y, 4)
+
+  ui.highlight({page}, ui.ON, 0)
+  screen.move((w / 4) + (#str * 6) * glitch_shift_px(), y * glitch_shift_px())
+  str_note_bar(interval.get())
+
+  ui.highlight({page})
+  interval.draw(x * glitch_shift_px(), bar_y, nil, w / 4)
+  screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
+  screen.text(str)
+
+  -- grid length marker(s)
+  str = BAR_VALS[grid.get()].str
+  w = interval.ui.width * BAR_VALS[grid.get()].value
+  x = 2 + ((grid.pos - 1) * (w / 4))
+  y = bar_y + grid.ui.height + 7
+
+  if update_chance then
+    screen.level(15)
+  else
+    ui.highlight({page})
   end
-  screen.stroke()
+  grid.draw_span(x * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
 
-  highlight(ON, 0, {page})
-  screen.move((w / 4) + (#str * 6), bar_y - 3)
-  screen.text("Interval")
-  highlight(ON, OFF, {page})
-  screen.rect(5 * glitch_shift_px() , bar_y, w / 4, bar_h + 1)
-  screen.stroke()
-  screen.move(w / 4, bar_y - 3)
+  ui.highlight({page}, ui.ON, 0)
+  screen.move((w / 4) + (#str * 6) * glitch_shift_px(), y * glitch_shift_px())
+  str_note_bar(grid.get())
+
+  ui.highlight({page})
+  grid.draw_span(2 * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
+  screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
   screen.text(str)
 
-  -- grid
-  highlight(ON, 0, {page})
-  w = bar_w * BAR_VALS[params:get("grid")].value
-  str = BAR_VALS[params:get("grid")].str
-  screen.move((w / 4) + (#str * 6), bar_y + bar_h + 9)
-  screen.text("Grid")
-  highlight(ON, OFF, {page})
-  screen.rect(5, bar_y, w / 4, bar_h)
-  screen.fill()
-  screen.move(w / 4, bar_y + bar_h + 9)
-  screen.text(str)
-
-
+  -- additional params
   page = 2
-  highlight(ON, OFF, {page})
 
-  -- chance
-  signal(5, bar_y + bar_h + 17, update_chance)
-  screen.move(10 * glitch_shift_px() , bar_y + bar_h + 20)
-  screen.text(params:get("chance") .. "%")
-  screen.move(10 * glitch_shift_px() , bar_y + bar_h + 28)
-  highlight(ON, 0, {page})
-  screen.text("Chance")
-
-  -- variation
-  highlight(ON, OFF, {page})
-  signal((VIEWPORT.width / 2) - 5 , bar_y + bar_h + 17, update_variation)
-  screen.move((VIEWPORT.width / 2)  * glitch_shift_px() , bar_y + bar_h + 20)
-  screen.text(params:get("variation"))
-  screen.move((VIEWPORT.width / 2) * glitch_shift_px() , bar_y + bar_h + 28)
-  highlight(ON, 0, {page})
-  screen.text("Variation")
+  draw_param("Chance", 2, page, y + 8, "%", update_chance)
+  draw_param("Variation", page, (ui.VIEWPORT.width * .5) - 8, y + 8, "", update_variation)
 
   page = 3
-  highlight(ON, OFF, {page})
 
-  -- glitch
-  signal(VIEWPORT.width * .75, bar_y + bar_h + 17, update_glitch or update_stutter)
-  screen.move(((VIEWPORT.width * .75) +  5) * glitch_shift_px(), bar_y + bar_h + 20)
-  screen.text(params:get("glitch") .. "%")
-  screen.move(((VIEWPORT.width * .75) + 5) * glitch_shift_px(), bar_y + bar_h + 28)
-  highlight(ON, 0, {page})
-  screen.text("Glitch")
-
-  if update_glitch then
-    screen.font_size(8 + math.floor(math.random() * (params:get("glitch") / 100)))
-  else
-    screen.font_size(8)
-  end
+  draw_param("Glitch", page, ui.VIEWPORT.width * .75, y + 8, "%", update_glitch)
 
   screen.update()
 end
 
-
+--- Writes params on script end.
 function cleanup()
   params:write()
 end

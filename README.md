@@ -1,6 +1,8 @@
 B-B-B-B-Beat
 ---
 
+v0.7.1
+
 A blatant copy of [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for Norns, with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
 This script uses live audio for all of its beat repeating magic!
@@ -23,13 +25,14 @@ I'll post a brief demo showing B-B-B-B-Beat in action, soon.
 
 B-B-B-B-Beat can be installed via [Maiden's](https://norns.local/maiden) project manager.
 
-**After install or update `RESET` or `SLEEP` is required, because B-B-B-B-Beat installs a new engine.**
+Or you can download [https://github.com/frederickk/b-b-b-b-beat/archive/primary.zip](https://github.com/frederickk/b-b-b-b-beat/archive/primary.zip) and upload to Norns using [sftp/Cyberduck/etc](https://llllllll.co/t/norns-maiden/14052/41) then rename folder to `b-b-b-b-beat`.
 
 
 ## Params
 
-Here's a table of all the controls and their values (also listed within the params menu).
+![B-B-B-B-Beat parameters](.assets/b-b-b-b-beat-params.gif)
 
+Here's a table of all the controls and their value ranges. These params can also be controled with Midi CC via `MAP` within params menu.
 
 | Page    | Controller                    | Description                               | Values                         |
 | ------- | ----------------------------- | ----------------------------------------- | ------------------------------ |
@@ -43,13 +46,10 @@ Here's a table of all the controls and their values (also listed within the para
 | 2       | E3                            | amount of Grid variance                   | 0 - 10                         |
 | 3       | E2                            | % glitch occurrence                       | 0 - 100%                       |
 
+
 ## Development
 
-[github.com/frederickk/b-b-b-b-beat/](https://github.com/frederickk/b-b-b-b-beat/)
-
-Download [github.com/frederickk/b-b-b-b-beat/archive/primary.zip](https://github.com/frederickk/b-b-b-b-beat/archive/primary.zip) and upload to Norns using [sftp/Cyberduck/etc](https://llllllll.co/t/norns-maiden/14052/41) then rename folder to `b-b-b-b-beat`.
-
-Or [SSH](https://monome.org/docs/norns/maiden/#ssh) into your Norns/Fates, then enter the following commands in terminal.
+[SSH](https://monome.org/docs/norns/maiden/#ssh) into your Norns/Fates, then enter the following commands in terminal.
 
 ```bash
 $ cd dust/code
@@ -67,15 +67,21 @@ $ git merge origin/primary
 
 
 ## Changelog
-- v0.0.5
+- v0.7.0
+    - Removed SC engine, restart no longer required on install
+    - Addressed repeat (tempo/softcut) bugs
+    - Tweaked UI
+- v0.6.0
+    - Refactored codebase 
+- v0.5.0
     - Fixed Glitch engine
     - Added param to toggle glitch noise (hiss)
     - Added param to toggle UI glitch
     - Added param to toggle stutter
     - Added to Maiden
-- v0.0.4
+- v0.4.0
     - Fixed params bug; params:add_option
     - Fixed "Chance" param; default 100%
     - Added Midi passthrough
     - Enabled param reading/writing
-- v0.0.3 Initial release
+- v0.3.0 Initial release
