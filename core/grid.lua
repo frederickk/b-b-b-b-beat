@@ -38,7 +38,12 @@ end
 -- @tparam inc {number}  increment amount
 function Grid.increment_sum(inc)
   Grid.sum = Grid.sum + inc
-  Grid.pos = Grid.pos + 1
+end
+
+--- Increments grid pos(ition).
+-- @tparam inc {number}  increment amount
+function Grid.increment_pos(inc)
+  Grid.pos = Grid.pos + (inc or 1)
 end
   
 --- Resets grid sum.
@@ -60,7 +65,7 @@ function Grid.update(val) end
 function Grid.draw(x, y, div, w, h)
   screen.rect(x, y, (w or Grid.ui.width), (h or Grid.ui.height))
   if (div ~= nil and div > 0) then
-    screen.level(2)
+    -- screen.level(2)
     for i = 1, (div - 1) do
       screen.move(x + ((w or Grid.ui.width) / div) * i, y)
       screen.line_rel(0, (h or Grid.ui.height))
@@ -78,7 +83,7 @@ end
 function Grid.draw_span(x, y, w, h, pad)
   screen.move(x, y)
   for x_ = 0, (w or Grid.ui.width), (pad or 2) do
-    for y_ = -1, (h or Grid.ui.height), (pad or 2) do 
+    for y_ = -2, (h or Grid.ui.height), (pad or 2) do 
       screen.pixel(x + x_, y + y_)
     end
   end

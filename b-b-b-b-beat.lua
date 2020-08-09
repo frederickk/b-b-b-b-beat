@@ -1,10 +1,10 @@
 --
 -- B-B-B-B-Beat
--- 0.7.1
+-- 0.7.3
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
--- K3    Randomize params
+-- K3    Toggle glitch 
 --
 -- E1    Cycle through params
 -- E4    BPM [Fates only]
@@ -12,13 +12,13 @@
 --
 -- S-S-S-S-Stutter and
 -- g-g-g-g-glitch till your
--- hearts content
+-- heart's content
 --
 -- See README for more details
 --
 
 --- constants
-local VERSION = "0.7.1"
+local VERSION = "0.7.3"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256, ppq = 64 },  -- [1]
@@ -43,6 +43,9 @@ for i = 1, #BAR_VALS do
   BAR_VALS_STR[i] = BAR_VALS[i].str
 end
 
+-- Index of BAR_VALS that triggers detail view (1 bar)
+local BAR_VALS_DETAIL_RES = 11 
+
 
 local mathh = include("lib/math_helper")
 local passthrough = include("lib/passthrough")
@@ -58,8 +61,7 @@ interval.index = 12 -- init/default: 2 bars
 
 -- defaults
 local bpm = 60
-
-local beat_div = BAR_VALS[grid.index].value
+local beat_div = BAR_VALS[1].value --grid.index].value
 local loop_len = 0
 local update_id
 
@@ -96,37 +98,41 @@ end
 
 --- Starts recording into Softcut.
 local function start_rec()
-  -- print("reenable record", update_chance)
-  -- set_loop_len()
+  -- print("reenable record")
   softcut.buffer_clear()
-  audio.level_adc(1.0) -- set input volume 1.0
+  audio.level_adc(1.0)
+
   for voice = 1, 2 do
     softcut.position(voice, 0)
-    softcut.rec(voice, 1.0) -- enable recording
-    softcut.rec_level(voice, 1.0) -- voice recording level 1.0
+    softcut.rec(voice, 1.0)
+    softcut.rec_level(voice, 1.0)
   end
 end
 
 --- Stops recording into softcut.
 local function stop_rec()
   -- print("disable record", update_chance)
-  -- audio.level_adc(0) -- set input volume 0
+  audio.level_adc(0)
+
   for voice = 1, 2 do
-    softcut.rec(voice, 0) -- disable recording
-    softcut.rec_level(voice, 0) -- voice recording level 0
+    softcut.rec(voice, 0) 
+    softcut.rec_level(voice, 0)
   end
 end
 
 --- Handler for clock update sync, fires at `beat_div` interval.
 local function update()
   while true do
+    -- clock.sync(beat_div * 4)
+    clock.sync(BAR_VALS[1].value * 4) -- sync is set to fastest possible 1/128
+
     -- randomize occurrence booleans
     update_chance = rand_occurrence(params:get("chance"), true)
+    update_stutter = rand_occurrence(params:get("glitch"), true)
     if (params:get("variation") > 0) then
       update_variation = rand_occurrence(params:get("chance"), true)
     end
     update_glitch = rand_occurrence(params:get("glitch"), true)
-    update_stutter = rand_occurrence(params:get("glitch"), true)
 
     -- variation
     if update_variation then
@@ -137,35 +143,54 @@ local function update()
       beat_div_vari = 0
     end
 
-    clock.sync(beat_div * 4)
-
-    update_tempo = not update_tempo
-
-    -- chance
-    if update_chance then
-      for voice = 1, 2 do
-        softcut.play(voice, 1)
-      end
-      audio.level_adc(0)
-    else
-      for voice = 1, 2 do
-        softcut.play(voice, 0)
-      end
-      audio.level_adc(1.0)
-    end
-
     -- recording incoming audio
-    if (grid.sum >= BAR_VALS[interval.get()].value) then
-      grid.reset_sum()
-    end
-
-    if (grid.sum == 0 or grid.sum >= BAR_VALS[interval.get()].value) then
+    local offset_val = (params:get("offset") / 16)
+    if (grid.sum == offset_val or grid.sum >= BAR_VALS[interval.get()].value) then
+      print("---------")
+      print("RECORD •")
       start_rec()
-    elseif (grid.sum >= BAR_VALS[grid.get()].value) then
+    elseif (grid.sum - offset_val == BAR_VALS[grid.index].value) then
+      print("RECORD X")
       stop_rec()
     end
-    
-    grid.increment_sum((beat_div + beat_div_vari))
+
+    -- bang on beat as set by grid length
+    if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
+      redraw()
+
+      update_tempo = not update_tempo
+      grid.increment_pos(1)
+
+      -- chance
+      -- TODO(frederickk): Solve passthrough when repeat isn't triggered.
+      if update_chance then
+        -- print("---------")
+        -- print("update_chance", update_chance)
+        for voice = 1, 2 do
+          softcut.play(voice, 1)
+        end
+        audio.level_adc(0)
+      else
+        -- for voice = 1, 2 do
+        --   softcut.play(voice, 0)
+        -- end
+        -- audio.level_adc(1.0)
+      end
+
+      if (params:get("glitch_stutter") == 1 and update_stutter) then
+        -- audio.level_adc(0)
+        audio.level_cut(0)
+      else
+        -- audio.level_adc(1.0)
+        audio.level_cut(1.0)
+      end
+
+      -- reset occurrence booleans to default
+      update_chance = false
+      update_stutter = false
+      update_variation = false
+      update_glitch = false
+    end
 
     -- glitch
     if update_glitch then
@@ -179,21 +204,12 @@ local function update()
       end
     end
 
-    if (params:get("glitch_stutter") == 1 and update_stutter) then
-      -- audio.level_adc(0)
-      audio.level_cut(0)
-    else
-      -- audio.level_adc(1.0)
-      audio.level_cut(1.0)
+    grid.increment_sum((beat_div + beat_div_vari))
+
+    if (grid.sum >= BAR_VALS[interval.get()].value) then
+      grid.reset_sum()
     end
 
-    redraw()
-
-    -- reset occurrence booleans to default
-    update_chance = false
-    update_stutter = false
-    update_variation = false
-    update_glitch = false
   end
 end
 
@@ -206,21 +222,18 @@ function grid.update(val)
     return
   end
 
-  beat_div = BAR_VALS[grid.index].value
+  -- ssu BAR_VALS[grid.index].value
+  beat_div = BAR_VALS[1].value
   set_loop_len()
-
-  -- grid.reset_sum()
 end
 
 --- Handler when "interval" parameter is set.
 function interval.update(val)
-  interval.index = val
+  interval.index = mathh.clamp(val, 5, #BAR_VALS) -- 6, #BAR_VALS)
 
   if (interval.index < grid.index) then
     grid.set(interval.index)
   end
-
-  -- grid.reset_sum()
 end
 
 --- Init/add params.
@@ -240,6 +253,15 @@ local function init_params()
         update_stutter = false
       end
     end)
+
+  -- offset starting position (by 1/16th notes) of record start (Beat Repeat: offset)
+  params:add_number("offset", "Offset", 0, 15, 0)
+  -- params:set_action("offset", function(val)
+  --     local len = ((val / 16) / params:get("clock_tempo")) * 60
+  --     for voice = 1, 2 do
+  --       softcut.rec_offset(voice, len * 4)
+  --     end
+  --   end)
 
   -- variation of clock division length (Beat Repeat: variation)
   params:add_number("variation", "Variation", 0, 10, 0)
@@ -274,17 +296,6 @@ local function init_params()
 
   -- load saved params
   params:read()
-end
-
---- Randomizes parameter values.
-function randomize_params()
-  interval.set(mathh.random_int(1, #BAR_VALS))
-  grid.set(mathh.random_int(1, #BAR_VALS))
-  params:set("chance", mathh.random_int(0, 100))
-  params:set("variation", mathh.random_int(0, 10))
-  -- params:set("glitch", mathh.random_int(0, 100))
-  -- params:set("glitch_ui", mathh.random_int(1, 2))
-  -- params:set("glitch_stutter", mathh.random_int(1, 2))
 end
 
 --- Init Softcut.
@@ -328,13 +339,11 @@ end
 
 --- Event handler for Midi start.
 function clock.transport.start()
---   print("clock.transport.start()")
   grid.reset_sum() 
 end
 
 --- Event handler for Midi stop.
 function clock.transport.stop()
---   print("clock.transport.stop()")
   grid.reset_sum() 
 end
 
@@ -383,12 +392,14 @@ function enc(index, delta)
     end
   elseif ui.page_get() == 2 then
     if index == 2 then
-      params:delta("chance", delta)
+      params:delta("offset", delta)
     elseif index == 3 then
-      params:delta("variation", delta)
+      params:delta("chance", delta)
     end
   elseif ui.page_get() == 3 then
     if index == 2 then
+      params:delta("variation", delta)
+    elseif index == 3 then
       params:delta("glitch", delta)
     end
   end
@@ -400,12 +411,20 @@ end
 -- @tparam index {number}  which button
 -- @tparam state {boolean|number}  button pressed
 function key(index, state)
+  glitch_ = params:get("glitch")
+
   if index == 2 and state == 1 then
     grid.reset_sum()
-    start_rec()
-    grid.increment_sum(beat_div)
-  -- elseif index == 3 and state == 1 then
-  --   randomize_params()
+  elseif index == 3 and state == 1 then
+    if (glitch_ == 100) then
+      params:set("glitch", 0)
+    else
+      params:set("glitch", 100)
+    end
+  end
+  
+  if state == 0 then
+    params:set("glitch", glitch_)
   end
 
   redraw()
@@ -431,24 +450,30 @@ end
 -- @tparam bool {boolean}  Boolean to trigger signal
 local function draw_param(name, page, x, y, suffix, bool)
   ui.highlight({page}, ui.ON, 0)
-  screen.move((x + 8) * glitch_shift_px() , (y + 10) * glitch_shift_px())
-  screen.text(name)
+  screen.move(x * glitch_shift_px() , (y + 10) * glitch_shift_px())
+  screen.text(string.sub(name, 1, 6))
 
   ui.highlight({page})
-  ui.signal((x + 3) * glitch_shift_px(), y * glitch_shift_px(), bool)
-  screen.move((x + 8) * glitch_shift_px(), (y + 2) * glitch_shift_px())
+  if (bool ~= nil) then
+    ui.signal((x + 3) * glitch_shift_px(), y * glitch_shift_px(), bool)
+    screen.move((x + 8) * glitch_shift_px(), (y + 2) * glitch_shift_px())
+  else
+    screen.move(x * glitch_shift_px(), (y + 2) * glitch_shift_px())
+  end
   screen.text(params:get(string.lower(name)) .. (suffix or ""))
 end
 
 --- Displays string for BAR_VAL selected.
 -- @tparam index {number}  index of length value 
-function str_note_bar(index)
-  if index < 11 then screen.text("Note")
-  elseif index == 11 then screen.text("Bar")
-  else screen.text("Bars") end
+-- @tparam str {number}  prefix
+function str_note_bar(index, str)
+  if index < BAR_VALS_DETAIL_RES then return (str or "") .. " Note"
+  elseif index == BAR_VALS_DETAIL_RES then return (str or "") .. " Bar"
+  else return (str or "") .. " Bars" end
 end
 
 --- Handler for screen redraw.
+-- TODO(frederickk): Refactor for clarity and simplicity.
 function redraw()
   if not update_glitch then	
     screen.clear()
@@ -457,47 +482,53 @@ function redraw()
   screen.level(ui.ON)
 
   -- page marker
-  ui.page_marker(12, 8, ui.page_get(), glitch_shift_px)
+  ui.page_marker(32, 10, ui.page_get(), glitch_shift_px)
 
   -- BPM
   page = 0
-  if (#norns.encoders.accel == 4) then
-    screen.level(ui.ON)
-  else
-    ui.highlight({page})
-  end
-  ui.metro_icon(10 * glitch_shift_px(), 5, grid.pos % 4)
-  ui.signal(5 * glitch_shift_px(), 7 * glitch_shift_px(), update_tempo)
+  if (#norns.encoders.accel == 4) then screen.level(ui.ON)
+  else ui.highlight({page}) end
+  ui.signal(5 * glitch_shift_px(), 7 * glitch_shift_px(), grid.sum == (params:get("offset") / 16))
+  ui.metro_icon(10 * glitch_shift_px(), 5, update_tempo)
   screen.move(25 * glitch_shift_px(), 10 * glitch_shift_px())
   screen.text(params:get("clock_tempo"))
 
   local bar_y = 24
-  local grid_seg_num = (interval.ui.width * BAR_VALS[interval.get()].value / (interval.ui.width * BAR_VALS[grid.get()].value))
+  local grid_seg_num = (interval.ui.width * BAR_VALS[interval.get()].value / (interval.ui.width * BAR_VALS[grid.index].value))
 
   page = 1
-
   -- interval length marker(s)
   local str = BAR_VALS[interval.get()].str
   local w = interval.ui.width * BAR_VALS[interval.get()].value
+  if (interval.get() <= BAR_VALS_DETAIL_RES) then
+    w = interval.ui.width * 4
+  end
   local x = 2
   local y = bar_y - 3
 
-  screen.level(ui.OFF)
-  interval.draw(x, bar_y, 4)
+  screen.level(2)
+  if (interval.get() >= BAR_VALS_DETAIL_RES) then
+    interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), 4)
+  end
 
-  ui.highlight({page}, ui.ON, 0)
-  screen.move((w / 4) + (#str * 6) * glitch_shift_px(), y * glitch_shift_px())
-  str_note_bar(interval.get())
+  local div = nil
+  if (interval.get() <= BAR_VALS_DETAIL_RES) then
+    div = BAR_VALS[grid.index].ppq * 4
+  end
 
   ui.highlight({page})
-  interval.draw(x * glitch_shift_px(), bar_y, nil, w / 4)
+  interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), div, (w / 4) * glitch_shift_px())
   screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
-  screen.text(str)
+  screen.text_right(str_note_bar(interval.get(), str))
 
   -- grid length marker(s)
-  str = BAR_VALS[grid.get()].str
-  w = interval.ui.width * BAR_VALS[grid.get()].value
-  x = 2 + ((grid.pos - 1) * (w / 4))
+  str = BAR_VALS[grid.index].str
+  w = interval.ui.width * BAR_VALS[grid.index].value
+  if (interval.get() <= BAR_VALS_DETAIL_RES) then
+    w = (interval.ui.width * 4) * BAR_VALS[grid.index].value
+  end
+
+  x = 2 + ((grid.pos) * (w / 4))
   y = bar_y + grid.ui.height + 7
 
   if update_chance then
@@ -507,24 +538,23 @@ function redraw()
   end
   grid.draw_span(x * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
 
-  ui.highlight({page}, ui.ON, 0)
-  screen.move((w / 4) + (#str * 6) * glitch_shift_px(), y * glitch_shift_px())
-  str_note_bar(grid.get())
-
   ui.highlight({page})
-  grid.draw_span(2 * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
-  screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
-  screen.text(str)
+  local offset_w = (interval.ui.width * BAR_VALS[7].value) * params:get("offset")
+  if (interval.get() <= 11) then
+    offset_w = ((interval.ui.width * 4) * BAR_VALS[7].value) * params:get("offset")
+  end
+  grid.draw_span((2 + offset_w / 4) * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
+  screen.move((2 + offset_w / 4) * glitch_shift_px(), y * glitch_shift_px())
+  screen.text(str_note_bar(grid.get(), str))
 
   -- additional params
   page = 2
-
-  draw_param("Chance", 2, page, y + 8, "%", update_chance)
-  draw_param("Variation", page, (ui.VIEWPORT.width * .5) - 8, y + 8, "", update_variation)
+  draw_param("Offset", page, 2, y + 8, "/16")
+  draw_param("Chance", page, (ui.VIEWPORT.width * .33) - 8, y + 8, "%", update_chance)
 
   page = 3
-
-  draw_param("Glitch", page, ui.VIEWPORT.width * .75, y + 8, "%", update_glitch)
+  draw_param("Variation", page, (ui.VIEWPORT.width * .63) - 8, y + 8, "", update_variation)
+  draw_param("Glitch", page, ui.VIEWPORT.width * .83, y + 8, "%", update_glitch)
 
   screen.update()
 end

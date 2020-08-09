@@ -13,16 +13,14 @@ local UI = {
   -- Default first page index.
   FIRST_PAGE = 0,
   -- Default last page index; e.g. total pages
-  LAST_PAGE = 3
+  LAST_PAGE = 3,
+  -- Current active page
+  active_page = 0
 }
 
 function init()
   
 end
-
---- Track position of metronome pointer
--- @private
-local metro_pos_ = false
 
 --- Add params for Page
 -- @tparam default_val {number}
@@ -73,8 +71,7 @@ function UI.page_marker(x, y, param_str, glitch_func)
   screen.move((UI.VIEWPORT.width - x) * (glitch_func() or 1), y * (glitch_func() or 1))
   screen.text_center("P" .. param_str)
   screen.line_width(1)
-  -- TODO(frederickk): this implementation is fragile.
-  screen.rect(UI.VIEWPORT.width - x - 6, y - 6, x + 2, y - 0)
+  screen.rect(UI.VIEWPORT.width - x - 6, y - 6, 14, 8)
   screen.stroke()
 end
 
@@ -95,18 +92,16 @@ end
 -- Thenk you @itsyourbedtime for creating this for Takt!
 -- @tparam x {number}  X-coordinate of element
 -- @tparam y {number}  Y-coordinate of element
--- @tparam phase {number}
-function UI.metro_icon(x, y, phase)
+-- @tparam tick {boolean}
+function UI.metro_icon(x, y, tick)
   screen.move(x + 2, y + 5)
   screen.line(x + 7, y)
   screen.line(x + 12, y + 5)
   screen.line(x + 3, y + 5)
   screen.stroke()
   screen.move(x + 7, y + 3)
-  screen.line(metro_pos_ and (x + 4) or (x + 10), y )
+  screen.line(tick and (x + 4) or (x + 10), y)
   screen.stroke()
-
-  if (phase == 0) then metro_pos_ = not metro_pos_ end
 end
 
 -- Default, page 0 is reserved for handling any E4 Fates

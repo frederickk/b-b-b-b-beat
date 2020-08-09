@@ -1,9 +1,9 @@
 B-B-B-B-Beat
 ---
 
-v0.7.1
+v0.7.3
 
-A blatant copy of [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for Norns, with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
+A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
 This script uses live audio for all of its beat repeating magic!
 
@@ -25,26 +25,32 @@ I'll post a brief demo showing B-B-B-B-Beat in action, soon.
 
 B-B-B-B-Beat can be installed via [Maiden's](https://norns.local/maiden) project manager.
 
-Or you can download [https://github.com/frederickk/b-b-b-b-beat/archive/primary.zip](https://github.com/frederickk/b-b-b-b-beat/archive/primary.zip) and upload to Norns using [sftp/Cyberduck/etc](https://llllllll.co/t/norns-maiden/14052/41) then rename folder to `b-b-b-b-beat`.
-
 
 ## Params
 
-![B-B-B-B-Beat parameters](.assets/b-b-b-b-beat-params.gif)
+Params can also be controled with Midi CC via `MAP` within params menu.
 
-Here's a table of all the controls and their value ranges. These params can also be controled with Midi CC via `MAP` within params menu.
+- **Interval** This controls how often new material is captured and starts “repeating” it. This is always synced to the song’s tempo.
+- **Grid** This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts.
+- **Offset** This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way).
+- **Chance** This determines the likelihood of repetitions actually taking place when Interval and Offset ”ask” for them. If Chance is set to 100 percent, repetitions will always take place at the given Interval/Offset time; if set to zero, there will be no repetitions and input audio is passed through without effect.
+- **Variation** This modifies the grid size (using length defined by grid) change randomly. If variation is set to zero, the grid size is fixed.
+- **Glitch** This determines the likelihood of glitching occurring and how intense the glitch effect will be.
+
+Here's a table of all the controls and their value ranges.
 
 | Page    | Controller                    | Description                               | Values                         |
 | ------- | ----------------------------- | ----------------------------------------- | ------------------------------ |
 | All     | E1                            | Change page                               |                                |
 | All     | K2                            | Resync to beat 1                          |                                |
-| All     | K3                            | Randomize parameters                      |                                |
+| All     | K3                            | toggle glitch effect                      |                                |
 | 0       | E2 or E4                      | BPM                                       | 20 - 300                       |
 | 1       | E2                            | Interval length                           | 1/256 - 4                      |
 | 1       | E2                            | Grid length                               | 1/256 - 4                      |
-| 2       | E2                            | % repeat occurrence (chance)              | 0 - 100%                       |
-| 2       | E3                            | amount of Grid variance                   | 0 - 10                         |
-| 3       | E2                            | % glitch occurrence                       | 0 - 100%                       |
+| 2       | E2                            | Offset amount                             | 0/16 - 15/16                   |
+| 2       | E3                            | % repeat occurrence (chance)              | 0 - 100%                       |
+| 3       | E2                            | amount of Grid variance                   | 0 - 10                         |
+| 3       | E3                            | % glitch occurrence                       | 0 - 100%                       |
 
 
 ## Development
@@ -67,21 +73,23 @@ $ git merge origin/primary
 
 
 ## Changelog
-- v0.7.0
+- v0.7.x
+    - Added offset param
+    - Updated UI; more detail
     - Removed SC engine, restart no longer required on install
     - Addressed repeat (tempo/softcut) bugs
-    - Tweaked UI
-- v0.6.0
+    - Updated README.md with more detail
+- v0.6.x
     - Refactored codebase 
-- v0.5.0
+- v0.5.x
     - Fixed Glitch engine
     - Added param to toggle glitch noise (hiss)
     - Added param to toggle UI glitch
     - Added param to toggle stutter
     - Added to Maiden
-- v0.4.0
+- v0.4.x
     - Fixed params bug; params:add_option
     - Fixed "Chance" param; default 100%
     - Added Midi passthrough
     - Enabled param reading/writing
-- v0.3.0 Initial release
+- v0.3.x Initial release
