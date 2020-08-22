@@ -1,13 +1,12 @@
 B-B-B-B-Beat
 ---
 
-v0.8.1
+v0.9.2
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
-This script uses live audio for all of its beat repeating magic!
+This script uses live audio or samples for all of its repeating magic! Read more about the different modes in the [guide](./GUIDE.md#modes).
 
-This script is getting closer and more stable to be a 1.0. I've added some additional params to manage the glitchy aspects. Further testing is required and I'm also looking to add some features before an official release. So, I'm releasing this here to gather feedback and bugs as I inch my way towards a 1.0.0.
 
 ![B-B-B-B-Beat UI](.assets/b-b-b-b-beat.gif)
 
@@ -28,29 +27,28 @@ B-B-B-B-Beat can be installed via [Maiden's](https://norns.local/maiden) project
 
 ## Params
 
-Params can also be controled with Midi CC via `MAP` within params menu.
-
-- **Interval** This controls how often new material is captured and starts “repeating” it. This is always synced to the song’s tempo.
-- **Grid** This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts.
-- **Offset** This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way).
-- **Chance** This determines the likelihood of repetitions actually taking place when Interval and Offset ”ask” for them. If Chance is set to 100 percent, repetitions will always take place at the given Interval/Offset time; if set to zero, there will be no repetitions and input audio is passed through without effect.
-- **Variation** This modifies the grid size (using length defined by grid) change randomly. If variation is set to zero, the grid size is fixed.
-- **Glitch** This determines the likelihood of glitching occurring and how intense the glitch effect will be.
-
-Here's a table of all the controls and their value ranges.
+Params be controled with Midi CC via `MAP` within params menu. For a detailed overview of the params and general functionality of this script refer to the [guide](./GUIDE.md).
 
 | Page    | Controller                    | Description                               | Values                         |
 | ------- | ----------------------------- | ----------------------------------------- | ------------------------------ |
 | All     | E1                            | Change page                               |                                |
 | All     | K2                            | Resync to beat 1                          |                                |
-| All     | K3                            | toggle glitch effect                      |                                |
+|         |                               |                                           |                                |
 | 0       | E2 or E4                      | BPM                                       | 20 - 300                       |
+|         |                               |                                           |                                |
 | 1       | E2                            | Interval length                           | 1/256 - 4                      |
 | 1       | E2                            | Grid length                               | 1/256 - 4                      |
+|         |                               |                                           |                                |
 | 2       | E2                            | Offset amount                             | 0/16 - 15/16                   |
 | 2       | E3                            | % repeat occurrence (chance)              | 0 - 100%                       |
+| 2       | K3                            | toggle chance (temp. set 0%)              | 0%                             |
+|         |                               |                                           |                                |
 | 3       | E2                            | amount of Grid variance                   | 0 - 10                         |
 | 3       | E3                            | % glitch occurrence                       | 0 - 100%                       |
+| 3       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
+|         |                               |                                           |                                |
+| 4       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
+| 4       | K3                            | load new sample                           | Any valid audio file           |
 
 
 ## Development
@@ -73,6 +71,13 @@ $ git merge origin/primary
 
 
 ## Changelog
+- v0.9.x
+    - Added sample loading
+    - Toggle live/sample mode in UI
+    - Tweaked glitch effect
+    - Fixed 'core' appearing in Norns list
+    - Created GUIDE.md
+    - Change K3 function to toggle params
 - v0.8.x
     - Separated clock and redraw coroutines (https://llllllll.co/t/norns-clock/30738/77) 
     - Fixed passthrough bug when chance below 100% 🤞

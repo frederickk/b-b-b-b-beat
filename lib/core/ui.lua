@@ -13,7 +13,7 @@ local UI = {
   -- Default first page index.
   FIRST_PAGE = 0,
   -- Default last page index; e.g. total pages
-  LAST_PAGE = 3,
+  LAST_PAGE = 4,
   -- Current active page
   active_page = 0
 }
@@ -104,13 +104,12 @@ function UI.metro_icon(x, y, tick)
   screen.stroke()
 end
 
---- Creates recording indicator (e.g. circle + "REC").
+--- Creates recording indicator (e.g. circle).
 -- @tparam x {number}  X-coordinate of element
 -- @tparam y {number}  Y-coordinate of element
 function UI.recording(x, y)
+  screen.move(math.floor(x) + 1, math.floor(y))
   screen.circle(math.floor(x), math.floor(y) - 3, 3)
-  screen.move(math.floor(x) + 5, math.floor(y))
-  screen.text("REC")
   screen.fill()
 end
 
@@ -118,13 +117,24 @@ end
 -- @tparam x {number}  X-coordinate of element
 -- @tparam y {number}  Y-coordinate of element
 function UI.tape_icon(x, y)
-  screen.move(math.floor(x), math.floor(y) - 3)
-  screen.line_rel(3, -2)
-  screen.line_rel(6, 0)
-  screen.move(math.floor(x) + 3, math.floor(y) - 3)
-  screen.circle(math.floor(x), math.floor(y) - 3, 3)
-  screen.move(math.floor(x) + 9, math.floor(y) - 3)
-  screen.circle(math.floor(x) + 9, math.floor(y) - 3, 3)
+  local r = 2
+
+  screen.move(math.floor(x), math.floor(y) - 4)
+  screen.line_rel(1, 0)
+  screen.line_rel((r * 5), 0)
+
+  for i = 0, 6, 2 do
+    screen.move(math.floor(x) + (r * i), math.floor(y) - 4)
+    screen.line_rel(0, 1)
+    screen.line_rel(0, r)
+  end
+
+  screen.move(math.floor(x), math.floor(y) + (r * 2) - 4)
+  screen.line_rel(1, 0)
+  screen.line_rel(r, 0)
+  screen.move(math.floor(x) + (r * 4), math.floor(y) + (r * 2) - 4)
+  screen.line_rel(1, 0)
+  screen.line_rel(r, 0)
   screen.stroke()
 end
 
