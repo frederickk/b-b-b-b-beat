@@ -1,6 +1,6 @@
 --
 -- B-B-B-B-Beat
--- 0.7.3
+-- 0.8.1
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
@@ -18,7 +18,7 @@
 --
 
 --- constants
-local VERSION = "0.7.3"
+local VERSION = "0.8.1"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256, ppq = 64 },  -- [1]
@@ -59,13 +59,14 @@ local interval = include("core/grid")
 interval.name = "Interval"
 interval.index = 12 -- init/default: 2 bars
 
--- defaults
+--- Defaults
 local bpm = 60
 local beat_div = BAR_VALS[1].value --grid.index].value
 local loop_len = 0
 local update_id
 
--- states
+--- States
+local is_recording = true
 local update_tempo = true
 local update_chance = false
 local update_stutter = false
@@ -92,16 +93,16 @@ local function set_loop_len()
   -- set loop length to 1 bar (or 1 second)
   loop_len = (BAR_VALS[(grid.index or 1)].value / params:get("clock_tempo")) * 60
   for voice = 1, 2 do
-    softcut.loop_end(voice, loop_len * 4)
+    softcut.loop_end(voice, loop_len)
   end
 end
 
 --- Starts recording into Softcut.
 local function start_rec()
-  -- print("reenable record")
-  softcut.buffer_clear()
+  is_recording = true
   audio.level_adc(1.0)
 
+  softcut.buffer_clear()
   for voice = 1, 2 do
     softcut.position(voice, 0)
     softcut.rec(voice, 1.0)
@@ -111,7 +112,7 @@ end
 
 --- Stops recording into softcut.
 local function stop_rec()
-  -- print("disable record", update_chance)
+  is_recording = false
   audio.level_adc(0)
 
   for voice = 1, 2 do
@@ -123,8 +124,7 @@ end
 --- Handler for clock update sync, fires at `beat_div` interval.
 local function update()
   while true do
-    -- clock.sync(beat_div * 4)
-    clock.sync(BAR_VALS[1].value * 4) -- sync is set to fastest possible 1/128
+    clock.sync(beat_div * 4)
 
     -- randomize occurrence booleans
     update_chance = rand_occurrence(params:get("chance"), true)
@@ -133,6 +133,14 @@ local function update()
       update_variation = rand_occurrence(params:get("chance"), true)
     end
     update_glitch = rand_occurrence(params:get("glitch"), true)
+
+    -- record incoming audio
+    local offset_val = (params:get("offset") / 16)
+    if (grid.sum == offset_val or grid.sum >= BAR_VALS[interval.get()].value) then
+      start_rec()
+    elseif (grid.sum - offset_val == BAR_VALS[grid.index].value) then
+      stop_rec()
+    end
 
     -- variation
     if update_variation then
@@ -143,38 +151,22 @@ local function update()
       beat_div_vari = 0
     end
 
-    -- recording incoming audio
-    local offset_val = (params:get("offset") / 16)
-    if (grid.sum == offset_val or grid.sum >= BAR_VALS[interval.get()].value) then
-      print("---------")
-      print("RECORD •")
-      start_rec()
-    elseif (grid.sum - offset_val == BAR_VALS[grid.index].value) then
-      print("RECORD X")
-      stop_rec()
-    end
-
     -- bang on beat as set by grid length
     if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
-      redraw()
-
       update_tempo = not update_tempo
       grid.increment_pos(1)
 
       -- chance
-      -- TODO(frederickk): Solve passthrough when repeat isn't triggered.
-      if update_chance then
-        -- print("---------")
-        -- print("update_chance", update_chance)
+      if update_chance and not is_recording then
         for voice = 1, 2 do
           softcut.play(voice, 1)
         end
         audio.level_adc(0)
       else
-        -- for voice = 1, 2 do
-        --   softcut.play(voice, 0)
-        -- end
-        -- audio.level_adc(1.0)
+        for voice = 1, 2 do
+          softcut.play(voice, 0)
+        end
+        audio.level_adc(1.0)
       end
 
       if (params:get("glitch_stutter") == 1 and update_stutter) then
@@ -193,8 +185,9 @@ local function update()
     end
 
     -- glitch
-    if update_glitch then
+    if update_glitch and not is_recording then
       for voice = 1, 2 do
+        softcut.play(voice, 1)
         softcut.position(voice, (math.random() * loop_len))
         softcut.rate(voice, ((math.random() * 2) * mathh.random(-params:get("glitch") / 10, params:get("glitch") / 10)))
       end
@@ -213,7 +206,12 @@ local function update()
   end
 end
 
--- Handler when "grid" parameter is set.
+--- Handler for metro thread, e.g. screen redrawing.
+local function update_metro(count)
+  redraw()
+end
+
+--- Handler when "grid" parameter is set.
 function grid.update(val)
   grid.index = mathh.clamp(val, 1, interval.index)
 
@@ -256,12 +254,6 @@ local function init_params()
 
   -- offset starting position (by 1/16th notes) of record start (Beat Repeat: offset)
   params:add_number("offset", "Offset", 0, 15, 0)
-  -- params:set_action("offset", function(val)
-  --     local len = ((val / 16) / params:get("clock_tempo")) * 60
-  --     for voice = 1, 2 do
-  --       softcut.rec_offset(voice, len * 4)
-  --     end
-  --   end)
 
   -- variation of clock division length (Beat Repeat: variation)
   params:add_number("variation", "Variation", 0, 10, 0)
@@ -299,6 +291,7 @@ local function init_params()
 end
 
 --- Init Softcut.
+-- TODO(frederickk): Implement pulling from tape samples.
 local function init_softcut()
   audio.level_adc(1.0) -- input volume 1.0
   -- audio.level_adc(0) -- input volume 0
@@ -333,6 +326,7 @@ local function init_softcut()
 end
 
 --- Init Midi.
+-- TODO(frederickk): Add ability to repeat Midi input with Midi output.
 function init_midi()
   passthrough.init()
 end
@@ -347,6 +341,15 @@ function clock.transport.stop()
   grid.reset_sum() 
 end
 
+--- Init Metro.
+function init_metro()
+  counter = metro.init()
+  counter.time = BAR_VALS[1].value * 4 -- sync is set to fastest possible 1/128
+  counter.count = -1
+  counter.event = update_metro
+  counter:start()
+end
+  
 --- I-I-I-I-Init.
 function init()
   print("b-b-b-b-beat v" .. VERSION)
@@ -354,6 +357,7 @@ function init()
   init_midi()
   init_params()
   init_softcut()
+  init_metro()
 
   update_id = clock.run(update)
 
@@ -432,7 +436,7 @@ end
 
 --- Returns px value for shifting UI.
 local function glitch_shift_px()
-  if (params:get("glitch_ui") == 1) and update_glitch then
+  if (params:get("glitch_ui") == 1) and update_glitch and not is_recording then
     local glitch_val = math.random() * ((params:get("glitch") / 1000))
 
     return (1 + (mathh.random(-1, 1) * glitch_val))
@@ -484,6 +488,14 @@ function redraw()
   -- page marker
   ui.page_marker(32, 10, ui.page_get(), glitch_shift_px)
 
+  -- Recording marker
+  if is_recording then
+    screen.level(ui.ON)
+  else
+    screen.level(ui.OFF)
+  end
+  ui.recording(55, 10)
+
   -- BPM
   page = 0
   if (#norns.encoders.accel == 4) then screen.level(ui.ON)
@@ -528,7 +540,7 @@ function redraw()
     w = (interval.ui.width * 4) * BAR_VALS[grid.index].value
   end
 
-  x = 2 + ((grid.pos) * (w / 4))
+  x = 2 + ((grid.pos - 1) * (w / 4))
   y = bar_y + grid.ui.height + 7
 
   if update_chance then

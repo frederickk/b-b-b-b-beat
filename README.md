@@ -1,7 +1,7 @@
 B-B-B-B-Beat
 ---
 
-v0.7.3
+v0.8.1
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
@@ -73,6 +73,9 @@ $ git merge origin/primary
 
 
 ## Changelog
+- v0.8.x
+    - Separated clock and redraw coroutines (https://llllllll.co/t/norns-clock/30738/77) 
+    - Fixed passthrough bug when chance below 100% 🤞
 - v0.7.x
     - Added offset param
     - Updated UI; more detail

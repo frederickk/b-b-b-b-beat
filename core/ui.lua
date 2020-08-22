@@ -104,6 +104,30 @@ function UI.metro_icon(x, y, tick)
   screen.stroke()
 end
 
+--- Creates recording indicator (e.g. circle + "REC").
+-- @tparam x {number}  X-coordinate of element
+-- @tparam y {number}  Y-coordinate of element
+function UI.recording(x, y)
+  screen.circle(math.floor(x), math.floor(y) - 3, 3)
+  screen.move(math.floor(x) + 5, math.floor(y))
+  screen.text("REC")
+  screen.fill()
+end
+
+--- Creates tape icon.
+-- @tparam x {number}  X-coordinate of element
+-- @tparam y {number}  Y-coordinate of element
+function UI.tape_icon(x, y)
+  screen.move(math.floor(x), math.floor(y) - 3)
+  screen.line_rel(3, -2)
+  screen.line_rel(6, 0)
+  screen.move(math.floor(x) + 3, math.floor(y) - 3)
+  screen.circle(math.floor(x), math.floor(y) - 3, 3)
+  screen.move(math.floor(x) + 9, math.floor(y) - 3)
+  screen.circle(math.floor(x) + 9, math.floor(y) - 3, 3)
+  screen.stroke()
+end
+
 -- Default, page 0 is reserved for handling any E4 Fates
 -- for genuine 3 encoder Norns devices.
 if (#norns.encoders.accel == 4) then
