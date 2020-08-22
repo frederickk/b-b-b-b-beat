@@ -1,10 +1,10 @@
 --
 -- B-B-B-B-Beat
--- 0.8.1
+-- 0.9.2
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
--- K3    Toggle glitch 
+-- K3    See README
 --
 -- E1    Cycle through params
 -- E4    BPM [Fates only]
@@ -15,10 +15,12 @@
 -- heart's content
 --
 -- See README for more details
+-- See GUIDE for getting
+-- started
 --
 
 --- constants
-local VERSION = "0.8.1"
+local VERSION = "0.9.2"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256, ppq = 64 },  -- [1]
@@ -47,15 +49,16 @@ end
 local BAR_VALS_DETAIL_RES = 11 
 
 
+local fileselect = require 'fileselect'
 local mathh = include("lib/math_helper")
 local passthrough = include("lib/passthrough")
-local ui = include("core/ui")
+local ui = include("lib/core/ui")
 
-local grid = include("core/grid")
+local grid = include("lib/core/grid")
 grid.name = "Grid"
 grid.index = 10 -- init/default: 1/2 note
 
-local interval = include("core/grid")
+local interval = include("lib/core/grid")
 interval.name = "Interval"
 interval.index = 12 -- init/default: 2 bars
 
@@ -63,16 +66,17 @@ interval.index = 12 -- init/default: 2 bars
 local bpm = 60
 local beat_div = BAR_VALS[1].value --grid.index].value
 local loop_len = 0
+local tape_len = 0
 local update_id
 
 --- States
 local is_recording = true
+local selecting_file = false
 local update_tempo = true
 local update_chance = false
 local update_stutter = false
 local update_variation = false
 local update_glitch = false
-
 
 --- Flips a given boolean bit... randomly.
 -- @tparam param_pct {number}  param value (should generate value 0 - 100)
@@ -90,23 +94,26 @@ end
 
 --- Sets loop length based on grid length and tempo.
 local function set_loop_len()
-  -- set loop length to 1 bar (or 1 second)
-  loop_len = (BAR_VALS[(grid.index or 1)].value / params:get("clock_tempo")) * 60
-  for voice = 1, 2 do
-    softcut.loop_end(voice, loop_len)
-  end
+  if tape_len <= 0 then -- changing loop length of a loaded sample, stops the sample from playing
+    loop_len = (BAR_VALS[(grid.index or 1)].value / params:get("clock_tempo")) * 60
+    for voice = 1, 2 do
+      softcut.loop_end(voice, loop_len)
+    end
+  end 
 end
 
 --- Starts recording into Softcut.
 local function start_rec()
-  is_recording = true
-  audio.level_adc(1.0)
+  audio.level_adc(1)
 
-  softcut.buffer_clear()
+  if tape_len <= 0 then
+    is_recording = true
+    softcut.buffer_clear()
+  end
+
   for voice = 1, 2 do
-    softcut.position(voice, 0)
-    softcut.rec(voice, 1.0)
-    softcut.rec_level(voice, 1.0)
+    softcut.position(voice, 1)
+    softcut.rec_level(voice, 1)
   end
 end
 
@@ -116,7 +123,6 @@ local function stop_rec()
   audio.level_adc(0)
 
   for voice = 1, 2 do
-    softcut.rec(voice, 0) 
     softcut.rec_level(voice, 0)
   end
 end
@@ -130,9 +136,11 @@ local function update()
     update_chance = rand_occurrence(params:get("chance"), true)
     update_stutter = rand_occurrence(params:get("glitch"), true)
     if (params:get("variation") > 0) then
-      update_variation = rand_occurrence(params:get("chance"), true)
+      update_variation = rand_occurrence(params:get("variation") * 10, true)
     end
     update_glitch = rand_occurrence(params:get("glitch"), true)
+
+    grid_index_prev = grid.index
 
     -- record incoming audio
     local offset_val = (params:get("offset") / 16)
@@ -142,39 +150,44 @@ local function update()
       stop_rec()
     end
 
-    -- variation
-    if update_variation then
-      local vari = params:get("variation")
-      local vari_rand = mathh.random_int(-vari - 1, vari)
-      beat_div_vari = beat_div * vari_rand
-    else
-      beat_div_vari = 0
-    end
-
     -- bang on beat as set by grid length
     if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
       update_tempo = not update_tempo
       grid.increment_pos(1)
 
+      -- variation
+      if update_variation then
+        local vari = params:get("variation")
+        local vari_rand = mathh.random_int(-vari - 1, vari)
+      
+        grid.index = util.clamp(grid.index * vari_rand, 1, grid_index_prev)
+        set_loop_len()
+
+        for voice = 1, 2 do
+          softcut.position(voice, 1)
+        end
+      end
+
       -- chance
       if update_chance and not is_recording then
         for voice = 1, 2 do
           softcut.play(voice, 1)
+          softcut.position(voice, 1)
         end
         audio.level_adc(0)
       else
-        for voice = 1, 2 do
-          softcut.play(voice, 0)
+        if tape_len <= 0 then -- when playing a sample, just let it play when repeat not triggered
+          for voice = 1, 2 do
+            -- softcut.play(voice, 0)
+          end
         end
-        audio.level_adc(1.0)
+        audio.level_adc(1)
       end
 
       if (params:get("glitch_stutter") == 1 and update_stutter) then
-        -- audio.level_adc(0)
         audio.level_cut(0)
       else
-        -- audio.level_adc(1.0)
-        audio.level_cut(1.0)
+        audio.level_cut(1)
       end
 
       -- reset occurrence booleans to default
@@ -189,26 +202,35 @@ local function update()
       for voice = 1, 2 do
         softcut.play(voice, 1)
         softcut.position(voice, (math.random() * loop_len))
-        softcut.rate(voice, ((math.random() * 2) * mathh.random(-params:get("glitch") / 10, params:get("glitch") / 10)))
+        
+        local randomize_rate = rand_occurrence(params:get("glitch"), true)
+        random_rate = (math.random() * params:get("glitch") / 10) * mathh.random(-params:get("glitch") / 100, params:get("glitch") / 100)
+        if randomize_rate then
+          softcut.rate(voice, random_rate)
+        end
       end
     else
       for voice = 1, 2 do
-        softcut.rate(voice, 1.0)
+        softcut.rate(voice, 1)
       end
     end
 
-    grid.increment_sum((beat_div + beat_div_vari))
+    grid.increment_sum(beat_div)
 
     if (grid.sum >= BAR_VALS[interval.get()].value) then
       grid.reset_sum()
     end
 
+    -- reset beat_div value
+    grid.index = grid_index_prev
   end
 end
 
 --- Handler for metro thread, e.g. screen redrawing.
 local function update_metro(count)
-  redraw()
+  if selecting_file == false then
+    redraw()
+  end
 end
 
 --- Handler when "grid" parameter is set.
@@ -220,7 +242,6 @@ function grid.update(val)
     return
   end
 
-  -- ssu BAR_VALS[grid.index].value
   beat_div = BAR_VALS[1].value
   set_loop_len()
 end
@@ -234,9 +255,115 @@ function interval.update(val)
   end
 end
 
+--- Init Softcut.
+local function init_softcut()
+  audio.level_adc(1) -- input volume 1
+  audio.level_adc_cut(1) -- ADC to Softcut input
+  audio.level_cut(1) -- Softcut master level (same as in LEVELS screen)
+  audio.level_cut_rev(0) -- Softcut reverb level 0
+  audio.rev_off() -- disable reverb
+
+  if tape_len <= 0 then
+    softcut.buffer_clear() -- clear Softcut buffer
+  end
+
+  for voice = 1, 2 do
+    softcut.enable(voice, 1) -- enable voice 1
+    softcut.buffer(voice, voice)
+    softcut.level(voice, 1) -- Softcut voice 1 output level
+    softcut.pan(voice, voice == 1 and -1 or 1)
+    softcut.rate(voice, 1)
+
+    softcut.loop(voice, 1) -- voice 1 enable loop
+    softcut.loop_start(voice, 0) -- voice 1 loop start @ 0.0s
+    if tape_len <= 0 then
+      set_loop_len()
+    end
+
+    softcut.position(voice, 1) -- voice 1 loop position @ 0.0s
+    softcut.level_input_cut(voice, voice, 1) -- Softcut input level ch 1
+    softcut.pre_level(voice, 1) -- voice 1 overdub level
+    softcut.rec_level(voice, 1) -- voice 1 record level
+    softcut.rec(voice, 1) -- voice 1 enable record
+  end
+
+  for voice = 1, 2 do
+    softcut.play(voice, 1) -- voice 1 enable playback
+  end
+end
+
+--- Init Midi.
+-- TODO(frederickk): Add ability to repeat Midi input with Midi output.
+function init_midi()
+  passthrough.init()
+end
+
+--- Event handler for Midi start.
+function clock.transport.start()
+  grid.reset_sum() 
+end
+
+--- Event handler for Midi stop.
+function clock.transport.stop()
+  grid.reset_sum() 
+end
+
+--- Init Metro.
+function init_metro()
+  counter = metro.init()
+  counter.time = BAR_VALS[1].value * 4 -- sync is set to fastest possible 1/128
+  counter.count = -1
+  counter.event = update_metro
+  counter:start()
+end
+
+--- Handler for loading sample into softcut.
+-- @tparam {string}  path to sound file
+local function load_file(file)
+  selecting_file = false
+
+  if file ~= "cancel" and params:get("mode") == 2 then
+    is_recording = false
+    local ch, samples = audio.file_info(file)
+    tape_len = samples / 48000
+
+    grid.reset_sum()
+    softcut.buffer_clear()
+    softcut.buffer_read_stereo(file, 0, 1, -1)
+    init_softcut()
+
+    for voice = 1, 2 do
+      softcut.loop_end(voice, tape_len)
+    end
+    
+    loop_len = tape_len
+  end
+end
+
 --- Init/add params.
 local function init_params()
   ui.add_page_params()
+
+  params:add_option("mode", "Mode", {"live", "sample"}, 1)
+  params:set_action("mode", function(val)
+      if val == 1 then
+        selecting_file = false
+        tape_len = 0
+        grid.reset_sum()
+      elseif val == 2 then
+        if params:get("sample") ~= "-" and params:get("sample") ~= nil then
+          load_file(params:get("sample"))
+        end
+      end
+    end)
+
+  -- load file into Softcut
+  -- https://llllllll.co/t/norns-2-0-softcut/20550/121
+  -- https://github.com/monome/softcut-studies/blob/master/7-files.lua
+  params:add_file("sample", "Audio file")
+  params:set_action("sample", load_file)
+
+  params:add_separator()
 
   -- loop duration (Beat Repeat: interval)
   interval.add_params(BAR_VALS_STR, interval.index)
@@ -288,75 +415,15 @@ local function init_params()
 
   -- load saved params
   params:read()
-end
+end 
 
---- Init Softcut.
--- TODO(frederickk): Implement pulling from tape samples.
-local function init_softcut()
-  audio.level_adc(1.0) -- input volume 1.0
-  -- audio.level_adc(0) -- input volume 0
-  audio.level_adc_cut(1) -- ADC to Softcut input
-  audio.level_cut(1.0) -- Softcut master level (same as in LEVELS screen)
-  audio.level_cut_rev(0) -- Softcut reverb level 0
-
-  softcut.buffer_clear() -- clear Softcut buffer
-
-  for voice = 1, 2 do
-    softcut.enable(voice, 1) -- enable voice 1
-    softcut.buffer(voice, voice)
-    softcut.level(voice, 1.0) -- Softcut voice 1 output level
-    softcut.pan(voice, voice == 1 and -1.0 or 1.0)
-    softcut.rate(voice, 1)
-
-    softcut.loop(voice, 1) -- voice 1 enable loop
-    softcut.loop_start(voice, 0) -- voice 1 loop start @ 0.0s
-    set_loop_len()
-    -- softcut.fade_time(voice, 1)
-
-    softcut.position(voice, 0) -- voice 1 loop position @ 0.0s
-    softcut.level_input_cut(voice, voice, 1.0) -- Softcut input level ch 1
-    softcut.pre_level(voice, 1.0) -- voice 1 overdub level
-    softcut.rec_level(voice, 1.0) -- voice 1 record level
-    softcut.rec(voice, 1) -- voice 1 enable record
-  end
-
-  for voice = 1, 2 do
-    softcut.play(voice, 1) -- voice 1 enable playback
-  end
-end
-
---- Init Midi.
--- TODO(frederickk): Add ability to repeat Midi input with Midi output.
-function init_midi()
-  passthrough.init()
-end
-
---- Event handler for Midi start.
-function clock.transport.start()
-  grid.reset_sum() 
-end
-
---- Event handler for Midi stop.
-function clock.transport.stop()
-  grid.reset_sum() 
-end
-
---- Init Metro.
-function init_metro()
-  counter = metro.init()
-  counter.time = BAR_VALS[1].value * 4 -- sync is set to fastest possible 1/128
-  counter.count = -1
-  counter.event = update_metro
-  counter:start()
-end
-  
 --- I-I-I-I-Init.
 function init()
   print("b-b-b-b-beat v" .. VERSION)
 
   init_midi()
-  init_params()
   init_softcut()
+  init_params()
   init_metro()
 
   update_id = clock.run(update)
@@ -406,8 +473,12 @@ function enc(index, delta)
     elseif index == 3 then
       params:delta("glitch", delta)
     end
+  elseif ui.page_get() == 4 then
+    if index == 2 then
+      params:delta("mode", delta)
+    end
   end
-
+  
   redraw()
 end
 
@@ -415,23 +486,26 @@ end
 -- @tparam index {number}  which button
 -- @tparam state {boolean|number}  button pressed
 function key(index, state)
-  glitch_ = params:get("glitch")
-
   if index == 2 and state == 1 then
     grid.reset_sum()
   elseif index == 3 and state == 1 then
-    if (glitch_ == 100) then
-      params:set("glitch", 0)
-    else
+    chance_prev = params:get("chance")
+    glitch_prev = params:get("glitch")
+
+    if params:get("page") == 2 then
+      params:set("chance", 0)
+    elseif params:get("page") == 3 then
       params:set("glitch", 100)
+    elseif params:get("page") == 4 and params:get("mode") == 2 then
+      selecting_file = true
+      fileselect.enter(_path.tape, load_file)
     end
   end
   
   if state == 0 then
-    params:set("glitch", glitch_)
+    params:set("glitch", glitch_prev)
+    params:set("chance", chance_prev)
   end
-
-  redraw()
 end
 
 --- Returns px value for shifting UI.
@@ -486,23 +560,14 @@ function redraw()
   screen.level(ui.ON)
 
   -- page marker
-  ui.page_marker(32, 10, ui.page_get(), glitch_shift_px)
-
-  -- Recording marker
-  if is_recording then
-    screen.level(ui.ON)
-  else
-    screen.level(ui.OFF)
-  end
-  ui.recording(55, 10)
+  ui.page_marker(15, 10, ui.page_get(), glitch_shift_px)
 
   -- BPM
   page = 0
   if (#norns.encoders.accel == 4) then screen.level(ui.ON)
   else ui.highlight({page}) end
-  ui.signal(5 * glitch_shift_px(), 7 * glitch_shift_px(), grid.sum == (params:get("offset") / 16))
-  ui.metro_icon(10 * glitch_shift_px(), 5, update_tempo)
-  screen.move(25 * glitch_shift_px(), 10 * glitch_shift_px())
+  ui.metro_icon(5 * glitch_shift_px(), 5, update_tempo)
+  screen.move(20 * glitch_shift_px(), 10 * glitch_shift_px())
   screen.text(params:get("clock_tempo"))
 
   local bar_y = 24
@@ -519,15 +584,15 @@ function redraw()
   local y = bar_y - 3
 
   screen.level(2)
-  if (interval.get() >= BAR_VALS_DETAIL_RES) then
+  if (interval.get() > BAR_VALS_DETAIL_RES) then
     interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), 4)
   end
 
   local div = nil
   if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    div = BAR_VALS[grid.index].ppq * 4
+    div = BAR_VALS[interval.get()].value / BAR_VALS[grid.index].value
   end
-
+  
   ui.highlight({page})
   interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), div, (w / 4) * glitch_shift_px())
   screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
@@ -539,8 +604,12 @@ function redraw()
   if (interval.get() <= BAR_VALS_DETAIL_RES) then
     w = (interval.ui.width * 4) * BAR_VALS[grid.index].value
   end
+  local grid_w = w / 4 
+  if div ~= nil then
+    grid_w = interval.ui.width / div
+  end
 
-  x = 2 + ((grid.pos - 1) * (w / 4))
+  x = 2 + ((grid.pos - 1) * grid_w)
   y = bar_y + grid.ui.height + 7
 
   if update_chance then
@@ -548,14 +617,15 @@ function redraw()
   else
     ui.highlight({page})
   end
-  grid.draw_span(x * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
+
+  grid.draw_span(x * glitch_shift_px(), bar_y * glitch_shift_px(), grid_w)
 
   ui.highlight({page})
   local offset_w = (interval.ui.width * BAR_VALS[7].value) * params:get("offset")
   if (interval.get() <= 11) then
     offset_w = ((interval.ui.width * 4) * BAR_VALS[7].value) * params:get("offset")
   end
-  grid.draw_span((2 + offset_w / 4) * glitch_shift_px(), bar_y * glitch_shift_px(), w / 4)
+  grid.draw_span((2 + offset_w / 4) * glitch_shift_px(), bar_y * glitch_shift_px(), grid_w)
   screen.move((2 + offset_w / 4) * glitch_shift_px(), y * glitch_shift_px())
   screen.text(str_note_bar(grid.get(), str))
 
@@ -567,6 +637,36 @@ function redraw()
   page = 3
   draw_param("Variation", page, (ui.VIEWPORT.width * .63) - 8, y + 8, "", update_variation)
   draw_param("Glitch", page, ui.VIEWPORT.width * .83, y + 8, "%", update_glitch)
+
+  -- Live input recording 
+  page = 4
+  if params:get("mode") == 1 then
+    if is_recording then
+      screen.level(ui.ON)
+    else
+      screen.level(ui.OFF)
+    end
+    screen.move(ui.VIEWPORT.center - 15, 10)
+    screen.text("REC")
+
+    screen.level(ui.ON)
+  else
+    screen.level(ui.OFF)
+  end
+  ui.recording(ui.VIEWPORT.center - 20, 10)
+
+  -- Tape/sample input playback
+  if params:get("mode") == 2 then
+    screen.level(ui.ON)
+  else
+    screen.level(ui.OFF)
+  end
+  ui.tape_icon(ui.VIEWPORT.center + 10, 10)
+
+  if params:get("sample") ~= "-" and params:get("sample") ~= nil then
+    screen.rect(ui.VIEWPORT.center + 8, 4, 16, 8)
+    screen.stroke()
+  end
 
   screen.update()
 end
