@@ -1,7 +1,7 @@
 # B-B-B-B-Beat Guide
 ---
 
-v0.9.1
+v0.9.4
 
 ## Introduction
 
@@ -15,7 +15,7 @@ For this Norns port, there are differences from the Ableton version. It's import
 
 **UI params**
 
-These params are visible on the display of Norns and can be directly adjusted using the UI and knobs.
+These params are vaisible on the display of Norns and can be directly adjusted using the UI and knobs.
 
 | Param     | Description                                                             | Values |
 | ---- | ------------------------------------------------------------ | ---- |
@@ -24,9 +24,11 @@ These params are visible on the display of Norns and can be directly adjusted us
 | `Grid` | This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts. | 1/256 notes – 4 bars |
 | `Offset` | This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way). | 0/16 notes – 15/16 notes |
 | `Chance` | This determines the likelihood of repetitions actually taking place when Interval and Offset ”ask” for them. If Chance is set to 100 percent, repetitions will always take place at the given Interval/Offset time; if set to zero, there will be no repetitions and input audio is passed through without effect. | 0 – 100% |
+| `Gate` |  This defines the total length of all repetitions in sixteenth notes. For example, if the gate is set to ”4/16”, the repetitions will occur over the period of one beat (quarter note), starting at the position defined by Interval and Offset. | 1–15/16, 1–4 bars |
 | `Variation` | This modifies the grid size (using length defined by grid) change randomly. If variation is set to zero, the grid size is fixed. | 0 – 10 |
 | `Glitch` | This determines the likelihood of glitching occurring and how intense the glitch effect will be. | 0 – 100% |
 | `Mode` | `Live`mode uses live audio input and `Sample` mode uses a chosen sample file (loading is done via the params menu). | `Live` or `Sample` |
+| `Output mode` | This determines the output signal `Mix` is a combination of the original input and repeats, `Insert` mutes the original input when repeats are played, otherwise it passes through, and `Gate` only plays the repeats. | `Mix`, `Insert`, or `Gate` |
 
 
 **Hidden params**
@@ -85,8 +87,11 @@ We'll configure Beat Repeat to record material once per bar and repeat the input
 | `Grid` | 1/8 Note |
 | `Offset` | 0/16 |
 | `Chance` | 100% |
+| `Gate` | 1 Bar |
 | `Variation` | 0 |
 | `Glitch` | 0% |
+| `Output mode` | `Insert` |
+
 
 Using the above audio input, each chord will repeat on the eigthth note. Adjusting the `Grid` param to increase the frequency of the repeats, by the given note value.  
 
@@ -108,9 +113,11 @@ and in the params menu, be sure to set `Glitch stutter` to `yes`
 | `Grid` | 1/8 Note |
 | `Offset` | 0/16 |
 | `Chance` | 100% |
+| `Gate` | 1 Bar |
 | `Variation` | 0 |
 | `Glitch` | 50% |
 | `Glitch stutter` | yes |
+| `Output mode` | `Insert` |
 
 Adjusting the `Glitch` param will change the frequency and intesity of glitch and stutter effects. To just  mangle audio without stutter disable `Glitch stutter`.
 
@@ -127,9 +134,11 @@ We'll build off of the above and add even more glitch effect. By reducing the `I
 | `Grid` | 1/16 Note |
 | `Offset` | 0/16 |
 | `Chance` | 75% |
+| `Gate` | 1 Bar |
 | `Variation` | 4 |
 | `Glitch` | 75% |
 | `Glitch stutter` | no |
+| `Output mode` | `Insert` |
 
 
 ### Example 4: Offset  
@@ -138,7 +147,7 @@ For the offset example, I'm using 1 bar of 1/4 notes because it's easier to unde
 
 ![1 bar of 1/4 notes in Ableton](.assets/guide/ableton-1-bar.jpg)
 
-We'll configure the repeater to loop once per bar and repeat the recorded material every 16th note. However, we're going to tell it to record audio starting half way through the bar (hene the `Offset` setting of 8/16). With the above audio example, that means only the C3 note will be repeated. 
+We'll configure the repeater to loop once per bar and repeat the recorded material every 16th note. However, we're going to tell it to record audio starting half way through the bar (hence the `Offset` setting of 8/16). With the above audio example, that means only the C3 note will be repeated. 
 
 *Note: This example assumes you are syncing the 1st beat of B-B-B-B-Beat to 1st beat of the incoming audio. [See above](#midi) for details on syncing.*
 
@@ -152,8 +161,10 @@ We'll configure the repeater to loop once per bar and repeat the recorded materi
 | `Grid` | 1/16 Note |
 | `Offset` | 8/16 |
 | `Chance` | 100% |
+| `Gate` | 1 Bar |
 | `Variation` | 0 |
 | `Glitch` | 0% |
+| `Output mode` | `Insert` |
 
 Adjusting the `Offset` param to change the recording trigger position.
 

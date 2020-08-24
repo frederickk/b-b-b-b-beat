@@ -1,8 +1,11 @@
 local Math_Helper = {}
 
 
--- @tparam a {number}
--- @tparam b {number}
+--- Returns greatest common deominator.
+-- @private
+-- @param a  number:
+-- @param b  number:
+-- @return number:
 function gcd(a, b)
   while a ~= 0 do
     a, b = b % a, a;
@@ -12,40 +15,43 @@ function gcd(a, b)
 end
 
 --- Clamps given value to min and max values.
--- @tparam val {number} input value
--- @tparam min {number} minmum range
--- @tparam max {number} maximum range
+-- @param val  number: input value
+-- @param min  number: minmum range
+-- @param max  number: maximum range
+-- @return number:
 function Math_Helper.clamp(val, min, max)
   return math.min(math.max(val, min), max)
 end
 
 --- Generates random number between given min and max.
--- @tparam min {number} minmum range
--- @tparam max {number} maximum range
--- returns random number as float
+-- @param min  number: minmum range
+-- @param max  number: maximum range
+-- @return number: random number as float
 function Math_Helper.random(min, max)
   return ((min or 0) + math.random() * ((max or 2) - (min or 0)));
 end
 
 --- Generates random integer number between given min and max.
--- @tparam min {number} minmum range
--- @tparam max {number} maximum range
--- returns random number as float
+-- @param min  number: minmum range
+-- @param max  number: maximum range
+-- @return number: random number as integer
 function Math_Helper.random_int(min, max)
   return math.floor(Math_Helper.random(min, max + 1))
 end
 
 --- Generates random percent integer value.
--- @tparam param_pct: param value (should generate value 0 - 100)
--- @tparam mult: multiplier; default = 10
+-- @param param_pct: param value (should generate value 0 - 100)
+-- @param mult: multiplier; default = 10
+-- @return number: random percentage as float
 function Math_Helper.random_pct(param_pct, mult)
   return math.floor(math.random() * (param_pct / 100) * (mult or 10))
 end
 
 
 --- Rounds a number
--- @tparam num {number}
--- @tparam numDecimalPlaces {number}
+-- @param num  number:
+-- @param numDecimalPlaces  number:
+-- @return number: rounded value as float
 function Math_Helper.round(num, numDecimalPlaces)
   local mult = 10^(numDecimalPlaces or 0)
 
@@ -54,8 +60,9 @@ end
 
 --- Converts given floating decimal value to fraction string.
 -- https://stackoverflow.com/questions/43565484/how-do-you-take-a-decimal-to-a-fraction-in-lua-with-no-added-libraries
--- @tparam num {float}  float value to convert
--- @tparam strLen {number}  Length of returned string
+-- @param num number:  float value to convert
+-- @param strLen  number:  Length of returned string
+-- @return tuple: 
 function Math_Helper.to_frac(num, strLen)
   -- TODO(frederick): need a more elegant way to check for infinity ("inf")
   if num == math.huge then
@@ -85,7 +92,8 @@ function Math_Helper.to_frac(num, strLen)
 end
 
 --- Returns denominator of a given number.
--- @tparam num {float}  float value
+-- @param num number:  float value
+-- @return number:
 function Math_Helper.get_denom(num)
   local s, n, d, e = Math_Helper.to_frac(num)
   
@@ -93,7 +101,8 @@ function Math_Helper.get_denom(num)
 end
 
 --- Returns numerator of a given number.
--- @tparam num {float}  float value
+-- @param num number:  float value
+-- @return number:
 function Math_Helper.get_numer(num)
   local s, n, d, e = Math_Helper.to_frac(num)
   
