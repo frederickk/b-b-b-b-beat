@@ -97,6 +97,7 @@ $ git merge origin/primary
     - Fixed loop length for non-48kHz samples (Softcut doesn't resample)
     - Fixed `Chance`/`Glitch` staying at 0%/100% when K3 is released on another page
     - Fixed 3 encoder norns being treated as Fates (no `P0`, no BPM control)
+    - Fixed triplet lengths (`1/96`, `1/48`, `3` bars): recording never stopped so nothing repeated, and steps fell at the wrong times
 - v0.9.x
     - Updated for latest norns firmware
         - BPM controls system `clock_tempo` directly; script no longer resets tempo on load

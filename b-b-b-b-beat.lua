@@ -163,6 +163,24 @@ local function is_wet_muted()
   return is_stuttering or (tape_len <= 0 and not is_repeating)
 end
 
+--- Returns true on the first clock tick at or after `pos`, measured from the
+-- start of the interval. Clock ticks are 1/256 bar, so triplet lengths like
+-- 1/96 never land on a tick exactly; this fires on the tick that passes them.
+-- @tparam sum {number}  current position in bars, e.g. grid.sum
+-- @tparam pos {number}  target position in bars
+local function passes(sum, pos)
+  local eps = 1e-9
+  return sum >= pos - eps and sum - beat_div < pos - eps
+end
+
+--- Returns true on the first clock tick of each step of length `step`.
+-- @tparam sum {number}  current position in bars, e.g. grid.sum
+-- @tparam step {number}  step length in bars
+local function is_step_start(sum, step)
+  local eps = 1e-9
+  return math.floor((sum + eps) / step) ~= math.floor((sum - beat_div + eps) / step)
+end
+
 --- Starts recording into Softcut.
 local function start_rec()
   audio.level_adc(1)
@@ -202,12 +220,12 @@ local function update()
     local offset_val = (params:get("offset") / 16)
     if (grid.sum == offset_val or grid.sum >= BAR_VALS[interval.get()].value) then
       start_rec()
-    elseif (grid.sum - offset_val == BAR_VALS[grid.index].value) then
+    elseif passes(grid.sum, offset_val + BAR_VALS[grid.index].value) then
       stop_rec()
     end
 
     -- bang on beat as set by grid length
-    if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
+    if is_step_start(grid.sum, BAR_VALS[grid.index].value) then
       grid.increment_pos(1)
 
       -- rolled once per step so on-screen signals hold for the whole step
