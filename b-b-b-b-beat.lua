@@ -518,7 +518,7 @@ function enc(index, delta)
     ui.page_delta(delta)
   end
 
-  if (#norns.encoders.accel == 4) then
+  if ui.HAS_E4 then
     -- Fates only; persistent BPM adjustment
     if index == 4 then
       params:delta("clock_tempo", delta)
@@ -671,7 +671,7 @@ end
 --- Draws tempo indicator and value (page 0).
 local function draw_tempo()
   local page = 0
-  if (#norns.encoders.accel == 4) then screen.level(ui.ON)
+  if ui.HAS_E4 then screen.level(ui.ON)
   else ui.highlight({page}) end
   -- swings once per bar, independent of grid length
   local is_even_bar = math.floor(clock.get_beats() / 4) % 2 == 0

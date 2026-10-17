@@ -134,9 +134,14 @@ function UI.tape_icon(x, y)
   screen.stroke()
 end
 
--- Default, page 0 is reserved for handling any E4 Fates
--- for genuine 3 encoder Norns devices.
-if (#norns.encoders.accel == 4) then
+-- True on devices with a 4th encoder (Fates). norns.encoders.accel always has
+-- 4 entries on current firmware, so check for the knob's input device instead.
+UI.HAS_E4 = string.find(
+  util.os_capture("cat /sys/class/input/*/device/name 2>/dev/null", true) or "",
+  "knob4") ~= nil
+
+-- Page 0 (BPM) is only needed on 3 encoder devices, Fates sets BPM with E4.
+if UI.HAS_E4 then
   UI.FIRST_PAGE = 1
 end
 
