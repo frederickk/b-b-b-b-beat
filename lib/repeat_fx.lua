@@ -24,9 +24,11 @@ local FILTER_RQ_MIN = 0.05
 local FILTER_RQ_MAX = 4
 local SLEW_TIME = 1 / 30 -- matches FX update rate, smooths LFO steps
 local GLITCH_SLEW_TIME = 0.001 -- Softcut default
+local GATE_SLEW_TIME = 0.002 -- declicks repeats starting and stopping
 
 local rate_vals = {}
 local rate_slew_prev = {}
+local level_slew_prev = {}
 local filter_on_prev
 
 --- Creates controlspec where one encoder detent moves by `step`.
@@ -127,6 +129,7 @@ function RepeatFx.init_softcut()
     softcut.level_slew_time(voice, SLEW_TIME)
     softcut.rate_slew_time(voice, SLEW_TIME)
     rate_slew_prev[voice] = SLEW_TIME
+    level_slew_prev[voice] = SLEW_TIME
   end
   RepeatFx.apply_filter(true)
 end
@@ -163,11 +166,18 @@ function RepeatFx.apply_rate(is_recording, rate_mult)
 end
 
 --- Sets Softcut voice level from volume.
--- @tparam is_muted {boolean}  e.g. glitch stutter
-function RepeatFx.apply_level(is_muted)
+-- @tparam is_muted {boolean}  e.g. between repeats or glitch stutter
+-- @tparam is_gate {boolean}  Optional; near instant change on grid steps,
+--   otherwise slewed to smooth LFO steps
+function RepeatFx.apply_level(is_muted, is_gate)
   local level = is_muted and 0 or RepeatFx.volume(clock.get_beats())
+  local slew = is_gate and GATE_SLEW_TIME or SLEW_TIME
 
   for voice = 1, 2 do
+    if slew ~= level_slew_prev[voice] then
+      softcut.level_slew_time(voice, slew)
+      level_slew_prev[voice] = slew
+    end
     softcut.level(voice, level)
   end
 end

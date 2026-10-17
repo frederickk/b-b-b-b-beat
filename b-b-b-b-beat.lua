@@ -89,7 +89,6 @@ local loop_len = 0
 local tape_len = 0
 local update_id
 local redraw_metro
-local grid_index_prev
 local chance_prev
 local glitch_prev
 local fx_id
@@ -98,7 +97,8 @@ local glitch_rate = {1, 1} -- per voice playback rate multiplier from glitch
 --- States
 local is_recording = true
 local selecting_file = false
-local update_chance = false
+local is_repeating = false -- Chance fired on current grid step
+local loop_index -- index of BAR_VALS the Softcut loop is set to
 local update_stutter = false
 local is_stuttering = false
 local update_variation = false
@@ -119,13 +119,44 @@ local function rand_occurrence(param_pct, val)
 end
 
 --- Sets loop length based on grid length and tempo.
-local function set_loop_len()
+-- @tparam index {number}  Optional index of BAR_VALS; default grid length
+local function set_loop_len(index)
+  loop_index = index or grid.index or 1
   if tape_len <= 0 then -- changing loop length of a loaded sample, stops the sample from playing
-    loop_len = (BAR_VALS[(grid.index or 1)].value / clock.get_tempo()) * 60
+    loop_len = (BAR_VALS[loop_index].value / clock.get_tempo()) * 60
     for voice = 1, 2 do
       softcut.loop_end(voice, loop_len)
     end
-  end 
+  end
+end
+
+--- Returns index of a random length 1 to `max_halvings` halvings shorter
+-- than given grid length, or given index when no shorter length exists.
+-- Only exact halvings, so the shorter loop repeats evenly within a grid step.
+-- @tparam index {number}  index of BAR_VALS
+-- @tparam max_halvings {number}
+local function vary_index(index, max_halvings)
+  local options = {}
+  for halvings = 1, max_halvings do
+    local target = BAR_VALS[index].value / (2 ^ halvings)
+    for i = 1, index - 1 do
+      if math.abs(BAR_VALS[i].value - target) < 1e-9 then
+        options[#options + 1] = i
+      end
+    end
+  end
+
+  if #options == 0 then
+    return index
+  end
+
+  return options[math.random(#options)]
+end
+
+--- Returns true when repeats should be silent: in live mode between repeats
+-- (Chance didn't fire), or during a glitch stutter.
+local function is_wet_muted()
+  return is_stuttering or (tape_len <= 0 and not is_repeating)
 end
 
 --- Starts recording into Softcut.
@@ -160,14 +191,8 @@ local function update()
     clock.sync(beat_div * 4)
 
     -- randomize occurrence booleans
-    update_chance = rand_occurrence(params:get("chance"), true)
     update_stutter = rand_occurrence(params:get("glitch"), true)
-    if (params:get("variation") > 0) then
-      update_variation = rand_occurrence(params:get("variation") * 10, true)
-    end
     update_glitch = rand_occurrence(params:get("glitch"), true)
-
-    grid_index_prev = grid.index
 
     -- record incoming audio
     local offset_val = (params:get("offset") / 16)
@@ -181,21 +206,23 @@ local function update()
     if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
       grid.increment_pos(1)
 
-      -- variation
-      if update_variation then
-        local vari = params:get("variation")
-        local vari_rand = mathh.random_int(-vari - 1, vari)
-      
-        grid.index = util.clamp(grid.index * vari_rand, 1, grid_index_prev)
-        set_loop_len()
+      -- rolled once per step so on-screen signals hold for the whole step
+      local vari = params:get("variation")
+      update_variation = vari > 0 and rand_occurrence(vari * 10, true)
+      local update_chance = rand_occurrence(params:get("chance"), true)
 
-        for voice = 1, 2 do
-          softcut.position(voice, 1)
-        end
+      -- variation: shorter loop for this step only, higher values shrink more
+      local index = grid.index
+      if update_variation then
+        index = vary_index(index, math.ceil(vari / 3))
+      end
+      if index ~= loop_index then
+        set_loop_len(index)
       end
 
       -- chance
-      if update_chance and not is_recording then
+      is_repeating = update_chance and not is_recording
+      if is_repeating then
         -- count only repeats that fire, otherwise decay runs down on grid
         -- steps Chance skipped and repeats are near silent when they play
         fx.increment_repeats()
@@ -205,21 +232,14 @@ local function update()
         end
         audio.level_adc(0)
       else
-        if tape_len <= 0 then -- when playing a sample, just let it play when repeat not triggered
-          for voice = 1, 2 do
-            -- softcut.play(voice, 0)
-          end
-        end
         audio.level_adc(1)
       end
 
       is_stuttering = (params:get("glitch_stutter") == 1 and update_stutter)
-      fx.apply_level(is_stuttering)
+      fx.apply_level(is_wet_muted(), true)
 
       -- reset occurrence booleans to default
-      update_chance = false
       update_stutter = false
-      update_variation = false
       update_glitch = false
     end
 
@@ -245,9 +265,6 @@ local function update()
     if (grid.sum >= BAR_VALS[interval.get()].value) then
       grid.reset_sum()
     end
-
-    -- reset beat_div value
-    grid.index = grid_index_prev
   end
 end
 
@@ -256,7 +273,7 @@ local function update_fx()
   while true do
     clock.sleep(1 / 30)
     fx.apply_rate(is_recording, glitch_rate)
-    fx.apply_level(is_stuttering)
+    fx.apply_level(is_wet_muted())
     fx.apply_filter()
   end
 end
@@ -710,7 +727,7 @@ local function draw_bars(bar_y)
   local grid_w = div and (width / div) or (scale * grid_val / 4)
   local label_y = bar_y + grid.ui.height + 7
 
-  if update_chance then
+  if is_repeating then
     screen.level(ui.ON)
   else
     ui.highlight({page})
@@ -732,7 +749,7 @@ end
 -- @tparam y {number}  Y-coordinate of the row
 local function draw_params(y)
   draw_param("Offset", 2, 2, y, "/16")
-  draw_param("Chance", 2, (ui.VIEWPORT.width * .33) - 8, y, "%", update_chance)
+  draw_param("Chance", 2, (ui.VIEWPORT.width * .33) - 8, y, "%", is_repeating)
   draw_param("Variation", 3, (ui.VIEWPORT.width * .63) - 8, y, "", update_variation)
   draw_param("Glitch", 3, ui.VIEWPORT.width * .83, y, "%", update_glitch)
 end
