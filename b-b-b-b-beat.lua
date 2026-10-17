@@ -356,14 +356,16 @@ local function load_file(file)
   selecting_file = false
 
   if file ~= nil and file ~= "cancel" and file ~= "-" and params:get("mode") == 2 then
-    local ch, samples, rate = audio.file_info(file)
+    local ch, samples = audio.file_info(file)
     if ch == nil or ch < 1 or samples == nil or samples <= 0 then
       print("b-b-b-b-beat: unable to read " .. file)
       return
     end
 
     is_recording = false
-    tape_len = samples / (rate or 48000)
+    -- Softcut copies frames into its 48 kHz buffer without resampling, so
+    -- buffer length is frames / 48000 whatever the file's own rate
+    tape_len = samples / 48000
 
     grid.reset_sum()
     softcut.buffer_clear()
