@@ -1,16 +1,6 @@
 local Math_Helper = {}
 
 
--- @tparam a {number}
--- @tparam b {number}
-local function gcd(a, b)
-  while a ~= 0 do
-    a, b = b % a, a;
-  end
-
-  return b;
-end
-
 --- Clamps given value to min and max values.
 -- @tparam val {number} input value
 -- @tparam min {number} minmum range
@@ -50,54 +40,6 @@ function Math_Helper.round(num, numDecimalPlaces)
   local mult = 10^(numDecimalPlaces or 0)
 
   return math.floor(num * mult + 0.5) / mult
-end
-
---- Converts given floating decimal value to fraction string.
--- https://stackoverflow.com/questions/43565484/how-do-you-take-a-decimal-to-a-fraction-in-lua-with-no-added-libraries
--- @tparam num {float}  float value to convert
--- @tparam strLen {number}  Length of returned string
-function Math_Helper.to_frac(num, strLen)
-  -- TODO(frederick): need a more elegant way to check for infinity ("inf")
-  if num == math.huge then
-    return 0, 0, 0, 0
-  end
-    
-  local integer = math.floor(num)
-  local decimal = num - integer
-
-  if decimal == 0 then 
-    return num, 1.0, 0.0
-  end
-
-  local prec = 1000000000
-  local gcd_ = gcd(Math_Helper.round(decimal * prec), prec)
-
-  local numer = math.floor((integer * prec + Math_Helper.round(decimal * prec)) / gcd_)
-  local denom = math.floor(prec / gcd_)
-  local err = numer / denom - num
-  local str = numer.."/"..denom
-
-  if denom == 1.0 then
-    str = numer
-  end
-
-  return str:sub(1, (strLen or 6)), numer, denom, err
-end
-
---- Returns denominator of a given number.
--- @tparam num {float}  float value
-function Math_Helper.get_denom(num)
-  local s, n, d, e = Math_Helper.to_frac(num)
-  
-  return d
-end
-
---- Returns numerator of a given number.
--- @tparam num {float}  float value
-function Math_Helper.get_numer(num)
-  local s, n, d, e = Math_Helper.to_frac(num)
-  
-  return n
 end
 
 return Math_Helper

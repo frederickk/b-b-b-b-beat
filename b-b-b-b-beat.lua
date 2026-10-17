@@ -564,123 +564,117 @@ local function str_note_bar(index, str)
   else return (str or "") .. " Bars" end
 end
 
+--- Scales a screen coordinate by the current glitch shift (1 when not glitching).
+-- @tparam v {number}  coordinate value
+local function g(v)
+  return v * glitch_shift_px()
+end
+
+--- Draws tempo indicator and value (page 0).
+local function draw_tempo()
+  local page = 0
+  if (#norns.encoders.accel == 4) then screen.level(ui.ON)
+  else ui.highlight({page}) end
+  ui.metro_icon(g(5), 5, update_tempo)
+  screen.move(g(20), g(10))
+  screen.text(util.round(clock.get_tempo()))
+end
+
+--- Draws interval and grid length markers (page 1).
+-- @tparam bar_y {number}  Y-coordinate of the bar
+-- @treturn number  Y-coordinate below the grid label, for following rows
+local function draw_bars(bar_y)
+  local page = 1
+  local width = interval.ui.width
+  local interval_val = BAR_VALS[interval.get()].value
+  local grid_val = BAR_VALS[grid.index].value
+  -- at 1 bar or less, the bar is drawn as a single detailed bar
+  local is_detail = interval.get() <= BAR_VALS_DETAIL_RES
+  local scale = is_detail and (width * 4) or width
+  local div = is_detail and (interval_val / grid_val) or nil
+
+  -- interval length marker(s)
+  local interval_w = (is_detail and scale or (width * interval_val)) / 4
+
+  screen.level(2)
+  if not is_detail then
+    interval.draw(g(2), g(bar_y), 4)
+  end
+
+  ui.highlight({page})
+  interval.draw(g(2), g(bar_y), div, g(interval_w))
+  screen.move(g(interval_w), g(bar_y - 3))
+  screen.text_right(str_note_bar(interval.get(), BAR_VALS[interval.get()].str))
+
+  -- grid length marker(s)
+  local grid_w = div and (width / div) or (scale * grid_val / 4)
+  local label_y = bar_y + grid.ui.height + 7
+
+  if update_chance then
+    screen.level(ui.ON)
+  else
+    ui.highlight({page})
+  end
+  grid.draw_span(g(2 + ((grid.pos - 1) * grid_w)), g(bar_y), grid_w)
+
+  -- offset marker, in 1/16 note steps
+  local offset_x = 2 + (scale * BAR_VALS[7].value * params:get("offset")) / 4
+
+  ui.highlight({page})
+  grid.draw_span(g(offset_x), g(bar_y), grid_w)
+  screen.move(g(offset_x), g(label_y))
+  screen.text(str_note_bar(grid.get(), BAR_VALS[grid.index].str))
+
+  return label_y
+end
+
+--- Draws offset, chance, variation and glitch values (pages 2 & 3).
+-- @tparam y {number}  Y-coordinate of the row
+local function draw_params(y)
+  draw_param("Offset", 2, 2, y, "/16")
+  draw_param("Chance", 2, (ui.VIEWPORT.width * .33) - 8, y, "%", update_chance)
+  draw_param("Variation", 3, (ui.VIEWPORT.width * .63) - 8, y, "", update_variation)
+  draw_param("Glitch", 3, ui.VIEWPORT.width * .83, y, "%", update_glitch)
+end
+
+--- Draws live/sample mode indicators (page 4).
+local function draw_mode()
+  local center = ui.VIEWPORT.center
+  local is_live = params:get("mode") == 1
+
+  -- live input recording
+  if is_live then
+    screen.level(is_recording and ui.ON or ui.OFF)
+    screen.move(center - g(15), g(10))
+    screen.text("REC")
+  end
+  screen.level(is_live and ui.ON or ui.OFF)
+  ui.recording(center - g(20), g(10))
+
+  -- tape/sample input playback
+  screen.level(is_live and ui.OFF or ui.ON)
+  ui.tape_icon(center + g(10), g(10))
+
+  if params:get("sample") ~= "-" and params:get("sample") ~= nil then
+    screen.rect(center + g(8), g(4), 16, 8)
+    screen.stroke()
+  end
+end
+
 --- Handler for screen redraw.
--- TODO(frederickk): Refactor for clarity and simplicity.
 function redraw()
-  if not update_glitch then	
+  -- skipping clear while glitching leaves trails on screen
+  if not update_glitch then
     screen.clear()
   end
 
   screen.level(ui.ON)
-
-  -- page marker
   ui.page_marker(15, 10, ui.page_get(), glitch_shift_px)
 
-  -- BPM
-  local page = 0
-  if (#norns.encoders.accel == 4) then screen.level(ui.ON)
-  else ui.highlight({page}) end
-  ui.metro_icon(5 * glitch_shift_px(), 5, update_tempo)
-  screen.move(20 * glitch_shift_px(), 10 * glitch_shift_px())
-  screen.text(util.round(clock.get_tempo()))
-
-  local bar_y = 24
-  local grid_seg_num = (interval.ui.width * BAR_VALS[interval.get()].value / (interval.ui.width * BAR_VALS[grid.index].value))
-
-  page = 1
-  -- interval length marker(s)
-  local str = BAR_VALS[interval.get()].str
-  local w = interval.ui.width * BAR_VALS[interval.get()].value
-  if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    w = interval.ui.width * 4
-  end
-  local x = 2
-  local y = bar_y - 3
-
-  screen.level(2)
-  if (interval.get() > BAR_VALS_DETAIL_RES) then
-    interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), 4)
-  end
-
-  local div = nil
-  if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    div = BAR_VALS[interval.get()].value / BAR_VALS[grid.index].value
-  end
-  
-  ui.highlight({page})
-  interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), div, (w / 4) * glitch_shift_px())
-  screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
-  screen.text_right(str_note_bar(interval.get(), str))
-
-  -- grid length marker(s)
-  str = BAR_VALS[grid.index].str
-  w = interval.ui.width * BAR_VALS[grid.index].value
-  if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    w = (interval.ui.width * 4) * BAR_VALS[grid.index].value
-  end
-  local grid_w = w / 4 
-  if div ~= nil then
-    grid_w = interval.ui.width / div
-  end
-
-  x = 2 + ((grid.pos - 1) * grid_w)
-  y = bar_y + grid.ui.height + 7
-
-  if update_chance then
-    screen.level(15)
-  else
-    ui.highlight({page})
-  end
-
-  grid.draw_span(x * glitch_shift_px(), bar_y * glitch_shift_px(), grid_w)
-
-  ui.highlight({page})
-  local offset_w = (interval.ui.width * BAR_VALS[7].value) * params:get("offset")
-  if (interval.get() <= 11) then
-    offset_w = ((interval.ui.width * 4) * BAR_VALS[7].value) * params:get("offset")
-  end
-  grid.draw_span((2 + offset_w / 4) * glitch_shift_px(), bar_y * glitch_shift_px(), grid_w)
-  screen.move((2 + offset_w / 4) * glitch_shift_px(), y * glitch_shift_px())
-  screen.text(str_note_bar(grid.get(), str))
-
-  -- additional params
-  page = 2
-  draw_param("Offset", page, 2, y + 8, "/16")
-  draw_param("Chance", page, (ui.VIEWPORT.width * .33) - 8, y + 8, "%", update_chance)
-
-  page = 3
-  draw_param("Variation", page, (ui.VIEWPORT.width * .63) - 8, y + 8, "", update_variation)
-  draw_param("Glitch", page, ui.VIEWPORT.width * .83, y + 8, "%", update_glitch)
-
-  -- Live input recording 
-  page = 4
-  if params:get("mode") == 1 then
-    if is_recording then
-      screen.level(ui.ON)
-    else
-      screen.level(ui.OFF)
-    end
-    screen.move(ui.VIEWPORT.center - 15 * glitch_shift_px(), 10 * glitch_shift_px())
-    screen.text("REC")
-
-    screen.level(ui.ON)
-  else
-    screen.level(ui.OFF)
-  end
-  ui.recording(ui.VIEWPORT.center - 20 * glitch_shift_px(), 10 * glitch_shift_px())
-
-  -- Tape/sample input playback
-  if params:get("mode") == 2 then
-    screen.level(ui.ON)
-  else
-    screen.level(ui.OFF)
-  end
-  ui.tape_icon(ui.VIEWPORT.center + 10 * glitch_shift_px(), 10 * glitch_shift_px())
-
-  if params:get("sample") ~= "-" and params:get("sample") ~= nil then
-    screen.rect(ui.VIEWPORT.center + 8 * glitch_shift_px(), 4 * glitch_shift_px(), 16, 8)
-    screen.stroke()
-  end
+  draw_tempo()
+  local y = draw_bars(24)
+  draw_params(y + 8)
+  draw_mode()
 
   screen.update()
 end
