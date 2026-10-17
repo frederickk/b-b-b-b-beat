@@ -37,7 +37,7 @@ These params are only listed within params menu.
 
 | Param     | Description                                                             | Values |
 | ---- | ------------------------------------------------------------ | ---- |
-|  `Glitch UI` | Toggle the glitching of the UI, this causes (intended) visual glitches more frequently and “violently” as the `Glitch` param gets closer to 100 | `yes` or `no` (default `no`) |
+|  `Glitch UI` | Toggle the glitching of the UI, this causes (intended) visual glitches more frequently and “violently” as the `Glitch` param gets closer to 100 | `yes` or `no` (default `yes`) |
 |  `Glitch stutter` | Toggle an audio stutter (e.g. random muting of audio) the likelihood of stutter occuring increases based on the `Glitch` command. | `yes` or `no` |
 
 

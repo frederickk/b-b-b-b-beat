@@ -503,7 +503,7 @@ local function init_params()
     end)
 
   -- glitchy params
-  params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 2)
+  params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 1)
   params:add_option("glitch_stutter", "Glitch stutter", {"yes", "no"}, 2)
 
   -- pitch, volume and filter of repeats (Beat Repeat: Pitch, Volume, Filter)

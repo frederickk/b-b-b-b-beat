@@ -86,6 +86,17 @@ $ git merge origin/primary
     - Added pitch decay and volume decay per repeat
     - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat), each on its own page
     - Added dry/wet `Mix` (`P4` `E3`) and `Input` stereo/mono param
+    - Each page now edits two params with `E2`/`E3`, no held keys
+    - `Chance` now mutes repeats on steps where it doesn't fire, so 0% is dry
+    - `Variation` now plays random shorter loops (exact halvings of `Grid`) for a step, instead of jumping to 1/256
+    - Tempo indicator swings once per bar instead of every grid step
+    - Screen glitch now follows audible glitches; `Glitch UI` on by default
+    - Fixed no audio being recorded when the system mixer's softcut `input adc` is at -inf
+    - Fixed volume and pitch decay counting grid steps where no repeat played
+    - Fixed band-pass filter level jumping by ~35 dB across `Width` (now unity gain)
+    - Fixed loop length for non-48kHz samples (Softcut doesn't resample)
+    - Fixed `Chance`/`Glitch` staying at 0%/100% when K3 is released on another page
+    - Fixed 3 encoder norns being treated as Fates (no `P0`, no BPM control)
 - v0.9.x
     - Updated for latest norns firmware
         - BPM controls system `clock_tempo` directly; script no longer resets tempo on load
@@ -94,9 +105,9 @@ $ git merge origin/primary
         - Stutter mutes softcut voices instead of global softcut level
         - PSETs written to last used slot instead of always overwriting slot 1
         - Named param separators/group IDs
-    - Fixed screen smearing when `Glitch UI` is off; `Glitch UI` now off by default
+    - Fixed screen smearing when `Glitch UI` is off
     - Fixed crash when releasing K2 (or K3 on pages without a K3 action)
-    - Fixed mono sample loading and sample length for non-48kHz files
+    - Fixed mono sample loading
     - K3 sample selection now updates (and saves) the `Audio file` param
     - Removed leaked globals (incl. a stray global `init` in `lib/core/ui.lua`)
     - Added sample loading
