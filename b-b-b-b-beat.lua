@@ -534,9 +534,9 @@ end
 function key(index, state)
   if index == 2 and state == 1 then
     grid.reset_sum()
-  elseif index == 3 and FX_PAGES[params:get("page")] then
+  elseif index == 3 and state == 1 and FX_PAGES[params:get("page")] then
     -- hold K3 to edit LFO on FX pages
-    fx.shift = (state == 1)
+    fx.shift = true
   elseif index == 3 and state == 1 then
     if params:get("page") == 2 then
       chance_prev = params:get("chance")
@@ -554,7 +554,8 @@ function key(index, state)
       end)
     end
   elseif index == 3 and state == 0 then
-    -- restore params temporarily toggled by K3
+    -- restore regardless of page, K3 may have been pressed before E1 changed it
+    fx.shift = false
     if chance_prev ~= nil then
       params:set("chance", chance_prev)
       chance_prev = nil
