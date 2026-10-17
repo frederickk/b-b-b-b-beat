@@ -18,10 +18,6 @@ local UI = {
   active_page = 0
 }
 
-function init()
-  
-end
-
 --- Add params for Page
 -- @tparam default_val {number}
 function UI.add_page_params(default_val) 

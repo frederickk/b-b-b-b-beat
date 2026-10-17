@@ -1,7 +1,7 @@
 # B-B-B-B-Beat Guide
 ---
 
-v0.9.1
+v0.9.3
 
 ## Introduction
 
@@ -19,7 +19,7 @@ These params are visible on the display of Norns and can be directly adjusted us
 
 | Param     | Description                                                             | Values |
 | ---- | ------------------------------------------------------------ | ---- |
-| `Tempo` | This can be set either manually or synced to sources as defined within Norns [`CLOCK` menu](https://monome.org/docs/norns/clocks/#parameters). | 20 – 300 |
+| `Tempo` | This can be set either manually or synced to sources as defined within Norns [`CLOCK` menu](https://monome.org/docs/norns/clocks/#parameters). | 1 – 300 |
 | `Interval`     | This controls how often new material is captured and starts “repeating” it. This is always synced to the song’s tempo. | 1/256 notes – 4 bars |
 | `Grid` | This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts. | 1/256 notes – 4 bars |
 | `Offset` | This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way). | 0/16 notes – 15/16 notes |

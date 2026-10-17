@@ -3,7 +3,7 @@ local Math_Helper = {}
 
 -- @tparam a {number}
 -- @tparam b {number}
-function gcd(a, b)
+local function gcd(a, b)
   while a ~= 0 do
     a, b = b % a, a;
   end

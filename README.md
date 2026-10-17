@@ -1,7 +1,7 @@
 B-B-B-B-Beat
 ---
 
-v0.9.2
+v0.9.3
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
@@ -17,7 +17,7 @@ I'll post a brief demo showing B-B-B-B-Beat in action, soon.
 
 ## Requirements
 
-[Norns](https://monome.org/norns) or [Fates](https://llllllll.co/t/fates-a-diy-norns-dac-board-for-raspberry-pi/22999) or device. For Fates owners, BPM value can be persistently controlled using the 4th encoder, for Norns owners it's `E2` the first page `P0`
+[Norns](https://monome.org/norns) or [Fates](https://llllllll.co/t/fates-a-diy-norns-dac-board-for-raspberry-pi/22999) or device running a recent norns release (uses `clock.tempo_change_handler`). For Fates owners, BPM value can be persistently controlled using the 4th encoder, for Norns owners it's `E2` the first page `P0`. BPM adjusts the system clock tempo directly (`PARAMETERS > CLOCK`).
 
 
 ## Install/Update
@@ -34,7 +34,7 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 | All     | E1                            | Change page                               |                                |
 | All     | K2                            | Resync to beat 1                          |                                |
 |         |                               |                                           |                                |
-| 0       | E2 or E4                      | BPM                                       | 20 - 300                       |
+| 0       | E2 or E4                      | BPM                                       | 1 - 300                        |
 |         |                               |                                           |                                |
 | 1       | E2                            | Interval length                           | 1/256 - 4                      |
 | 1       | E2                            | Grid length                               | 1/256 - 4                      |
@@ -72,6 +72,17 @@ $ git merge origin/primary
 
 ## Changelog
 - v0.9.x
+    - Updated for latest norns firmware
+        - BPM controls system `clock_tempo` directly; script no longer resets tempo on load
+        - Loop length follows tempo changes from any clock source (`clock.tempo_change_handler`)
+        - System mixer levels (input, softcut, reverb send) restored when script exits
+        - Stutter mutes softcut voices instead of global softcut level
+        - PSETs written to last used slot instead of always overwriting slot 1
+        - Named param separators/group IDs
+    - Fixed crash when releasing K2 (or K3 on pages without a K3 action)
+    - Fixed mono sample loading and sample length for non-48kHz files
+    - K3 sample selection now updates (and saves) the `Audio file` param
+    - Removed leaked globals (incl. a stray global `init` in `lib/core/ui.lua`)
     - Added sample loading
     - Toggle live/sample mode in UI
     - Tweaked glitch effect
