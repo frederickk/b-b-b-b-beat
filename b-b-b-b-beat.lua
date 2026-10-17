@@ -281,13 +281,18 @@ function interval.update(val)
   end
 end
 
---- Init Softcut.
-local function init_softcut()
+--- Routes input into Softcut, overriding system mixer (restored on cleanup).
+-- Must run after `params:bang()`, which re-applies stored mixer levels and
+-- would otherwise silence Softcut's input if "input adc" is at -inf.
+local function init_audio()
   audio.level_adc(1) -- input volume 1
   audio.level_adc_cut(1) -- ADC to Softcut input
   audio.level_cut(1) -- Softcut master level (same as in LEVELS screen)
-  audio.level_cut_rev(0) -- Softcut reverb send 0 (restored on cleanup)
+  audio.level_cut_rev(0) -- Softcut reverb send 0
+end
 
+--- Init Softcut.
+local function init_softcut()
   if tape_len <= 0 then
     softcut.buffer_clear() -- clear Softcut buffer
   end
@@ -458,6 +463,7 @@ function init()
   init_midi()
   init_softcut()
   init_params()
+  init_audio()
   init_metro()
   fx.init_softcut()
 
