@@ -47,6 +47,9 @@ for i = 1, #BAR_VALS do
   BAR_VALS_STR[i] = BAR_VALS[i].str
 end
 
+-- Seconds the screen glitches for after an audible glitch
+local GLITCH_UI_HOLD = 0.1
+
 -- Index of BAR_VALS that triggers detail view (1 bar)
 local BAR_VALS_DETAIL_RES = 11 
 
@@ -98,6 +101,7 @@ local glitch_rate = {1, 1} -- per voice playback rate multiplier from glitch
 local is_recording = true
 local selecting_file = false
 local is_repeating = false -- Chance fired on current grid step
+local glitch_ui_until = 0 -- util.time() the screen glitch ends
 local loop_index -- index of BAR_VALS the Softcut loop is set to
 local update_stutter = false
 local is_stuttering = false
@@ -245,6 +249,10 @@ local function update()
 
     -- glitch
     if update_glitch and not is_recording then
+      if not is_wet_muted() then
+        -- hold long enough for the 30 fps screen to show what's heard
+        glitch_ui_until = util.time() + GLITCH_UI_HOLD
+      end
       for voice = 1, 2 do
         softcut.play(voice, 1)
         softcut.position(voice, (math.random() * loop_len))
@@ -620,7 +628,7 @@ end
 
 --- Returns true when the UI glitch effect should be drawn.
 local function is_ui_glitching()
-  return (params:get("glitch_ui") == 1) and update_glitch and not is_recording
+  return (params:get("glitch_ui") == 1) and util.time() < glitch_ui_until
 end
 
 --- Returns px value for shifting UI.
@@ -751,7 +759,7 @@ local function draw_params(y)
   draw_param("Offset", 2, 2, y, "/16")
   draw_param("Chance", 2, (ui.VIEWPORT.width * .33) - 8, y, "%", is_repeating)
   draw_param("Variation", 3, (ui.VIEWPORT.width * .63) - 8, y, "", update_variation)
-  draw_param("Glitch", 3, ui.VIEWPORT.width * .83, y, "%", update_glitch)
+  draw_param("Glitch", 3, ui.VIEWPORT.width * .83, y, "%", util.time() < glitch_ui_until)
 end
 
 --- Returns display string for repeat FX param.
