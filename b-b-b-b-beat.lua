@@ -10,6 +10,7 @@
 -- E4    BPM [Fates only]
 -- E2-E3 Adjust highlight params
 -- K3    (hold) P5-P7 LFO
+-- E3    P4 dry/wet mix
 --
 -- S-S-S-S-Stutter and
 -- g-g-g-g-glitch till your
@@ -284,11 +285,30 @@ end
 --- Routes input into Softcut, overriding system mixer (restored on cleanup).
 -- Must run after `params:bang()`, which re-applies stored mixer levels and
 -- would otherwise silence Softcut's input if "input adc" is at -inf.
+--- Sets dry (monitor) and wet (Softcut) levels from "mix" param.
+-- Both are at unity at 50%, so the midpoint matches the unmixed signal.
+local function apply_mix()
+  local mix = params:get("mix") / 100
+  audio.level_monitor(math.min(1, 2 * (1 - mix)))
+  audio.level_cut(math.min(1, 2 * mix))
+end
+
+--- Routes ADC channels into Softcut voices from "input" param.
+-- Mono feeds input 1 to both voices so repeats play on both sides.
+local function apply_input()
+  local is_mono = params:get("input") == 2
+  for voice = 1, 2 do
+    softcut.level_input_cut(1, voice, (is_mono or voice == 1) and 1 or 0)
+    softcut.level_input_cut(2, voice, (not is_mono and voice == 2) and 1 or 0)
+  end
+end
+
 local function init_audio()
   audio.level_adc(1) -- input volume 1
   audio.level_adc_cut(1) -- ADC to Softcut input
-  audio.level_cut(1) -- Softcut master level (same as in LEVELS screen)
   audio.level_cut_rev(0) -- Softcut reverb send 0
+  apply_mix()
+  apply_input()
 end
 
 --- Init Softcut.
@@ -311,7 +331,6 @@ local function init_softcut()
     end
 
     softcut.position(voice, 1) -- voice 1 loop position @ 0.0s
-    softcut.level_input_cut(voice, voice, 1) -- Softcut input level ch 1
     softcut.pre_level(voice, 1) -- voice 1 overdub level
     softcut.rec_level(voice, 1) -- voice 1 record level
     softcut.rec(voice, 1) -- voice 1 enable record
@@ -411,6 +430,14 @@ local function init_params()
   -- https://github.com/monome/softcut-studies/blob/master/7-files.lua
   params:add_file("sample", "Audio file")
   params:set_action("sample", load_file)
+
+  params:add_option("input", "Input", {"stereo", "mono"}, 1)
+  params:set_action("input", apply_input)
+
+  -- dry/wet balance, 50% leaves both at unity
+  params:add_number("mix", "Mix", 0, 100, 50,
+    function(param) return param:get() .. "%" end)
+  params:set_action("mix", apply_mix)
 
   params:add_separator("repeat_separator", "Repeat")
 
@@ -519,6 +546,8 @@ function enc(index, delta)
   elseif ui.page_get() == 4 then
     if index == 2 then
       params:delta("mode", delta)
+    elseif index == 3 then
+      params:delta("mix", delta)
     end
   elseif FX_PAGES[ui.page_get()] then
     local fx_page = FX_PAGES[ui.page_get()]
@@ -746,6 +775,14 @@ local function draw_fx_params(fx_page, y)
   draw_cell("Depth", fx_str(depth_id), ui.VIEWPORT.width * .83, y, lfo_level, lfo_level)
 end
 
+--- Draws mode, mix and input values (page 4).
+-- @tparam y {number}  Y-coordinate of the row
+local function draw_io_params(y)
+  draw_cell("Mode", params:string("mode"), 2, y, ui.ON, ui.ON)
+  draw_cell("Mix", params:string("mix"), (ui.VIEWPORT.width * .33) - 8, y, ui.ON, ui.ON)
+  draw_cell("Input", params:string("input"), (ui.VIEWPORT.width * .63) - 8, y, ui.OFF, ui.OFF)
+end
+
 --- Draws live/sample mode indicators (page 4).
 local function draw_mode()
   local center = ui.VIEWPORT.center
@@ -784,6 +821,8 @@ function redraw()
   local y = draw_bars(24)
   if FX_PAGES[ui.page_get()] then
     draw_fx_params(FX_PAGES[ui.page_get()], y + 8)
+  elseif ui.page_get() == 4 then
+    draw_io_params(y + 8)
   else
     draw_params(y + 8)
   end
@@ -794,7 +833,7 @@ end
 
 --- Restores system mixer params this script changes directly via `audio`.
 local function restore_mixer()
-  for _, id in ipairs({"input_level", "softcut_level", "rev_cut_input", "cut_input_adc"}) do
+  for _, id in ipairs({"input_level", "monitor_level", "softcut_level", "rev_cut_input", "cut_input_adc"}) do
     if params.lookup[id] then
       params:lookup_param(id):bang()
     end

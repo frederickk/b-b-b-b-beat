@@ -48,6 +48,7 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 | 3       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
 |         |                               |                                           |                                |
 | 4       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
+| 4       | E3                            | dry/wet mix (both full at 50%)            | 0 - 100%                       |
 | 4       | K3                            | load new sample                           | Any valid audio file           |
 |         |                               |                                           |                                |
 | 5       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
@@ -84,6 +85,7 @@ $ git merge origin/primary
     - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P7`)
     - Added pitch decay and volume decay per repeat
     - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat); hold `K3` to edit
+    - Added dry/wet `Mix` (`P4` `E3`) and `Input` stereo/mono param
 - v0.9.x
     - Updated for latest norns firmware
         - BPM controls system `clock_tempo` directly; script no longer resets tempo on load

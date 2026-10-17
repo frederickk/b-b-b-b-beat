@@ -27,6 +27,8 @@ These params are visible on the display of Norns and can be directly adjusted us
 | `Variation` | This modifies the grid size (using length defined by grid) change randomly. If variation is set to zero, the grid size is fixed. | 0 – 10 |
 | `Glitch` | This determines the likelihood of glitching occurring and how intense the glitch effect will be. | 0 – 100% |
 | `Mode` | `Live`mode uses live audio input and `Sample` mode uses a chosen sample file (loading is done via the params menu). | `Live` or `Sample` |
+| `Mix` | Balance of dry input and repeats. At 50% both are at full level; lower values fade the repeats, higher values fade the dry input. | 0 – 100% |
+| `Input` | `Stereo` records inputs 1 and 2 to the left and right repeats. `Mono` records input 1 to both. Set in the params menu. | `Stereo` or `Mono` |
 
 
 **Hidden params**
