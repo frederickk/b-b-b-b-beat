@@ -187,11 +187,17 @@ function RepeatFx.apply_filter(force)
       softcut.post_filter_hp(voice, 0)
       softcut.post_filter_br(voice, 0)
       softcut.post_filter_dry(voice, is_on and 0 or 1)
-      softcut.post_filter_bp(voice, is_on and 1 or 0)
+      if not is_on then
+        softcut.post_filter_bp(voice, 0)
+      end
     end
     if is_on then
+      local rq = RepeatFx.filter_rq()
       softcut.post_filter_fc(voice, RepeatFx.filter_freq(clock.get_beats()))
-      softcut.post_filter_rq(voice, RepeatFx.filter_rq())
+      softcut.post_filter_rq(voice, rq)
+      -- Softcut's band-pass peaks at 1 / rq (+26 dB at narrowest width),
+      -- scaling by rq keeps the centre frequency at unity gain
+      softcut.post_filter_bp(voice, rq)
     end
   end
 end
