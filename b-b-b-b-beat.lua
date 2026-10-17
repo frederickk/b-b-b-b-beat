@@ -1,6 +1,6 @@
 --
 -- B-B-B-B-Beat
--- 0.9.3
+-- 0.10.0
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
@@ -9,6 +9,7 @@
 -- E1    Cycle through params
 -- E4    BPM [Fates only]
 -- E2-E3 Adjust highlight params
+-- K3    (hold) P5-P7 LFO
 --
 -- S-S-S-S-Stutter and
 -- g-g-g-g-glitch till your
@@ -20,7 +21,7 @@
 --
 
 --- constants
-local VERSION = "0.9.3"
+local VERSION = "0.10.0"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256, ppq = 64 },  -- [1]
@@ -48,11 +49,22 @@ end
 -- Index of BAR_VALS that triggers detail view (1 bar)
 local BAR_VALS_DETAIL_RES = 11 
 
+-- Repeat FX pages; E2/E3 edit `main`/`second`, or LFO rate/depth while K3 held
+local FX_PAGES = {
+  [5] = { target = "pitch", main = "pitch", second = "pitch_decay",
+    labels = {"Pitch", "Decay"} },
+  [6] = { target = "volume", main = "volume", second = "volume_decay",
+    labels = {"Volume", "Decay"} },
+  [7] = { target = "filter", main = "filter_freq", second = "filter_width",
+    labels = {"Freq", "Width"} },
+}
+
 
 local fileselect = require 'fileselect'
 local mathh = include("lib/math_helper")
 local passthrough = include("lib/passthrough")
 local ui = include("lib/core/ui")
+local fx = include("lib/repeat_fx")
 
 local grid = include("lib/core/grid")
 grid.name = "Grid"
@@ -71,6 +83,8 @@ local redraw_metro
 local grid_index_prev
 local chance_prev
 local glitch_prev
+local fx_id
+local glitch_rate = {1, 1} -- per voice playback rate multiplier from glitch
 
 --- States
 local is_recording = true
@@ -78,6 +92,7 @@ local selecting_file = false
 local update_tempo = true
 local update_chance = false
 local update_stutter = false
+local is_stuttering = false
 local update_variation = false
 local update_glitch = false
 
@@ -113,6 +128,7 @@ local function start_rec()
     is_recording = true
     softcut.buffer_clear()
   end
+  fx.reset_repeats()
 
   for voice = 1, 2 do
     softcut.position(voice, 1)
@@ -157,6 +173,9 @@ local function update()
     if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
       update_tempo = not update_tempo
       grid.increment_pos(1)
+      if not is_recording then
+        fx.increment_repeats()
+      end
 
       -- variation
       if update_variation then
@@ -187,10 +206,8 @@ local function update()
         audio.level_adc(1)
       end
 
-      local stutter_level = (params:get("glitch_stutter") == 1 and update_stutter) and 0 or 1
-      for voice = 1, 2 do
-        softcut.level(voice, stutter_level)
-      end
+      is_stuttering = (params:get("glitch_stutter") == 1 and update_stutter)
+      fx.apply_level(is_stuttering)
 
       -- reset occurrence booleans to default
       update_chance = false
@@ -208,14 +225,13 @@ local function update()
         local randomize_rate = rand_occurrence(params:get("glitch"), true)
         local random_rate = (math.random() * params:get("glitch") / 10) * mathh.random(-params:get("glitch") / 100, params:get("glitch") / 100)
         if randomize_rate then
-          softcut.rate(voice, random_rate)
+          glitch_rate[voice] = random_rate
         end
       end
     else
-      for voice = 1, 2 do
-        softcut.rate(voice, 1)
-      end
+      glitch_rate = {1, 1}
     end
+    fx.apply_rate(is_recording, glitch_rate)
 
     grid.increment_sum(beat_div)
 
@@ -225,6 +241,16 @@ local function update()
 
     -- reset beat_div value
     grid.index = grid_index_prev
+  end
+end
+
+--- Handler for repeat FX, applies LFO movement between clock ticks.
+local function update_fx()
+  while true do
+    clock.sleep(1 / 30)
+    fx.apply_rate(is_recording, glitch_rate)
+    fx.apply_level(is_stuttering)
+    fx.apply_filter()
   end
 end
 
@@ -415,6 +441,9 @@ local function init_params()
   params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 2)
   params:add_option("glitch_stutter", "Glitch stutter", {"yes", "no"}, 2)
 
+  -- pitch, volume and filter of repeats (Beat Repeat: Pitch, Volume, Filter)
+  fx.add_params(BAR_VALS, BAR_VALS_DETAIL_RES)
+
   -- trigger param defaults
   params:bang()
 
@@ -430,8 +459,10 @@ function init()
   init_softcut()
   init_params()
   init_metro()
+  fx.init_softcut()
 
   update_id = clock.run(update)
+  fx_id = clock.run(update_fx)
 
   screen.level(15)
   screen.aa(0)
@@ -444,6 +475,7 @@ end
 function enc(index, delta)
   if index == 1 then
     ui.page_delta(delta)
+    fx.shift = false
   end
 
   if (#norns.encoders.accel == 4) then
@@ -482,6 +514,13 @@ function enc(index, delta)
     if index == 2 then
       params:delta("mode", delta)
     end
+  elseif FX_PAGES[ui.page_get()] then
+    local fx_page = FX_PAGES[ui.page_get()]
+    if index == 2 then
+      params:delta(fx.shift and (fx_page.target .. "_lfo_rate") or fx_page.main, delta)
+    elseif index == 3 then
+      params:delta(fx.shift and (fx_page.target .. "_lfo_depth") or fx_page.second, delta)
+    end
   end
   
   redraw()
@@ -493,6 +532,9 @@ end
 function key(index, state)
   if index == 2 and state == 1 then
     grid.reset_sum()
+  elseif index == 3 and FX_PAGES[params:get("page")] then
+    -- hold K3 to edit LFO on FX pages
+    fx.shift = (state == 1)
   elseif index == 3 and state == 1 then
     if params:get("page") == 2 then
       chance_prev = params:get("chance")
@@ -538,6 +580,35 @@ local function glitch_shift_px()
   return 1
 end
 
+--- Scales a screen coordinate by the current glitch shift (1 when not glitching).
+-- @tparam v {number}  coordinate value
+local function g(v)
+  return v * glitch_shift_px()
+end
+
+--- Draws label with value and optional signal.
+-- @tparam label {string}
+-- @tparam value {string}
+-- @tparam x {number}
+-- @tparam y {number}
+-- @tparam label_level {number}  brightness of label
+-- @tparam value_level {number}  brightness of value and signal
+-- @tparam bool {boolean}  Optional boolean to trigger signal
+local function draw_cell(label, value, x, y, label_level, value_level, bool)
+  screen.level(label_level)
+  screen.move(g(x), g(y + 10))
+  screen.text(string.sub(label, 1, 6))
+
+  screen.level(value_level)
+  if (bool ~= nil) then
+    ui.signal(g(x + 3), g(y), bool)
+    screen.move(g(x + 8), g(y + 2))
+  else
+    screen.move(g(x), g(y + 2))
+  end
+  screen.text(value)
+end
+
 --- Draws given param with signal and value.
 -- @tparam name {string}  Name of parameter
 -- @tparam page {number}
@@ -546,18 +617,9 @@ end
 -- @tparam suffix {string}  Optional suffix for display value
 -- @tparam bool {boolean}  Boolean to trigger signal
 local function draw_param(name, page, x, y, suffix, bool)
-  ui.highlight({page}, ui.ON, 0)
-  screen.move(x * glitch_shift_px() , (y + 10) * glitch_shift_px())
-  screen.text(string.sub(name, 1, 6))
-
-  ui.highlight({page})
-  if (bool ~= nil) then
-    ui.signal((x + 3) * glitch_shift_px(), y * glitch_shift_px(), bool)
-    screen.move((x + 8) * glitch_shift_px(), (y + 2) * glitch_shift_px())
-  else
-    screen.move(x * glitch_shift_px(), (y + 2) * glitch_shift_px())
-  end
-  screen.text(params:get(string.lower(name)) .. (suffix or ""))
+  local is_active = ui.page_get() == page
+  draw_cell(name, params:get(string.lower(name)) .. (suffix or ""), x, y,
+    is_active and ui.ON or 0, is_active and ui.ON or ui.OFF, bool)
 end
 
 --- Displays string for BAR_VAL selected.
@@ -567,12 +629,6 @@ local function str_note_bar(index, str)
   if index < BAR_VALS_DETAIL_RES then return (str or "") .. " Note"
   elseif index == BAR_VALS_DETAIL_RES then return (str or "") .. " Bar"
   else return (str or "") .. " Bars" end
-end
-
---- Scales a screen coordinate by the current glitch shift (1 when not glitching).
--- @tparam v {number}  coordinate value
-local function g(v)
-  return v * glitch_shift_px()
 end
 
 --- Draws tempo indicator and value (page 0).
@@ -642,6 +698,45 @@ local function draw_params(y)
   draw_param("Glitch", 3, ui.VIEWPORT.width * .83, y, "%", update_glitch)
 end
 
+--- Returns display string for repeat FX param.
+-- @tparam id {string}  param id
+local function fx_str(id)
+  local val = params:get(id)
+
+  if id == "pitch" then
+    return string.format("%+dst", val)
+  elseif id == "pitch_decay" then
+    return string.format("%+.2f", val)
+  elseif id == "filter_freq" then
+    return fx.format_freq(val)
+  elseif string.find(id, "_lfo_rate$") then
+    return BAR_VALS[val].str
+  elseif id == "pitch_lfo_depth" or id == "filter_lfo_depth" then
+    return string.format("%.2f", val)
+  end
+
+  return val .. "%"
+end
+
+--- Draws repeat FX values for current FX page (pages 5 - 7).
+-- @tparam fx_page {table}  entry of FX_PAGES
+-- @tparam y {number}  Y-coordinate of the row
+local function draw_fx_params(fx_page, y)
+  local main_level = fx.shift and ui.OFF or ui.ON
+  local lfo_level = fx.shift and ui.ON or ui.OFF
+  local depth_id = fx_page.target .. "_lfo_depth"
+  local lfo_on = params:get(depth_id) > 0 and fx.lfo[fx_page.target].value > 0
+  local filter_on = nil
+  if fx_page.target == "filter" then
+    filter_on = params:get("filter") == 2
+  end
+
+  draw_cell(fx_page.labels[1], fx_str(fx_page.main), 2, y, main_level, main_level, filter_on)
+  draw_cell(fx_page.labels[2], fx_str(fx_page.second), (ui.VIEWPORT.width * .33) - 8, y, main_level, main_level)
+  draw_cell("Rate", fx_str(fx_page.target .. "_lfo_rate"), (ui.VIEWPORT.width * .63) - 8, y, lfo_level, lfo_level, lfo_on)
+  draw_cell("Depth", fx_str(depth_id), ui.VIEWPORT.width * .83, y, lfo_level, lfo_level)
+end
+
 --- Draws live/sample mode indicators (page 4).
 local function draw_mode()
   local center = ui.VIEWPORT.center
@@ -678,7 +773,11 @@ function redraw()
 
   draw_tempo()
   local y = draw_bars(24)
-  draw_params(y + 8)
+  if FX_PAGES[ui.page_get()] then
+    draw_fx_params(FX_PAGES[ui.page_get()], y + 8)
+  else
+    draw_params(y + 8)
+  end
   draw_mode()
 
   screen.update()

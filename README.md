@@ -1,7 +1,7 @@
 B-B-B-B-Beat
 ---
 
-v0.9.3
+v0.10.0
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
@@ -49,6 +49,15 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 |         |                               |                                           |                                |
 | 4       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
 | 4       | K3                            | load new sample                           | Any valid audio file           |
+|         |                               |                                           |                                |
+| 5       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
+| 5       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
+| 6       | E2                            | volume of repeats                         | 0 - 100%                       |
+| 6       | E3                            | volume decay per repeat                   | 0 - 100%                       |
+| 7       | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
+| 7       | E3                            | band-pass filter width                    | 1 - 100%                       |
+| 5 - 7   | K3 (hold) + E2                | LFO rate                                  | 1/256 - 4                      |
+| 5 - 7   | K3 (hold) + E3                | LFO depth                                 |                                |
 
 
 ## Development
@@ -71,6 +80,10 @@ $ git merge origin/primary
 
 
 ## Changelog
+- v0.10.x
+    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P7`)
+    - Added pitch decay and volume decay per repeat
+    - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat); hold `K3` to edit
 - v0.9.x
     - Updated for latest norns firmware
         - BPM controls system `clock_tempo` directly; script no longer resets tempo on load

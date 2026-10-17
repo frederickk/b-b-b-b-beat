@@ -1,7 +1,7 @@
 # B-B-B-B-Beat Guide
 ---
 
-v0.9.3
+v0.10.0
 
 ## Introduction
 
@@ -38,6 +38,31 @@ These params are only listed within params menu.
 |  `Glitch UI` | Toggle the glitching of the UI, this causes (intended) visual glitches more frequently and “violently” as the `Glitch` param gets closer to 100 | `yes` or `no` (default `no`) |
 |  `Glitch stutter` | Toggle an audio stutter (e.g. random muting of audio) the likelihood of stutter occuring increases based on the `Glitch` command. | `yes` or `no` |
 
+
+
+### Repeat FX
+
+Pitch, volume and filter shape the repeats (Softcut playback), like Beat Repeat's `Pitch`, `Volume`/`Decay` and `Filter` controls. Each has its own page, `E2` and `E3` adjust the two main values, **hold `K3`** to adjust its LFO instead (`E2` LFO rate, `E3` LFO depth). The dot next to `Freq` shows if the filter is on, the dot next to `Rate` blinks with the LFO.
+
+| Page | Param | Description | Values |
+| ---- | ---- | ------------------------------------------------------------ | ---- |
+| `P5` | `Pitch` | Pitch of repeats. Recording always happens at normal speed, so captured audio isn't warped. | -24 – +24 semitones |
+| `P5` | `Pitch decay` | Semitones added to pitch on each repeat; negative values make repeats fall in pitch (Beat Repeat's `Pitch Decay`). Resets on each new capture. | -12 – +12 semitones |
+| `P6` | `Volume` | Level of repeats. | 0 – 100% |
+| `P6` | `Volume decay` | Level lost on each repeat, repeats fade out (Beat Repeat's `Decay`). Resets on each new capture. | 0 – 100% |
+| `P7` | `Filter freq` | Center frequency of the band-pass filter. | 20 Hz – 20 kHz |
+| `P7` | `Filter width` | Width of the band-pass filter, narrow (resonant) to wide. | 1 – 100% |
+| | `Filter` | Turns the band-pass filter on or off (params menu only). | `off` or `on` (default `off`) |
+
+**Modulation**
+
+Every FX param has an LFO, set within the `REPEAT FX` params group (or by holding `K3` on its page).
+
+| Param | Description | Values |
+| ---- | ------------------------------------------------------------ | ---- |
+| `LFO rate` | Length of one LFO cycle, synced to tempo. | 1/256 notes – 4 bars |
+| `LFO shape` | `sine`, `triangle`, `saw` and `square` move smoothly/regularly; `s&h` jumps to a new random value each cycle; `rand/rpt` jumps to a new random value on **each repeat** (ignores rate). | |
+| `LFO depth` | Amount of modulation: semitones for pitch, % of volume (tremolo), octaves for filter frequency. `0` turns the LFO off. | pitch 0 – 24 st, volume 0 – 100%, filter 0 – 4 oct |
 
 
 ### Modes
