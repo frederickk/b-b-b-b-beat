@@ -44,21 +44,21 @@ These params are only listed within params menu.
 
 ### Repeat FX
 
-Pitch, volume and filter shape the repeats (Softcut playback), like Beat Repeat's `Pitch`, `Volume`/`Decay` and `Filter` controls. Each has its own page, `E2` and `E3` adjust the two main values, **hold `K3`** to adjust its LFO instead (`E2` LFO rate, `E3` LFO depth). The dot next to `Freq` shows if the filter is on, the dot next to `Rate` blinks with the LFO.
+Pitch, volume and filter shape the repeats (Softcut playback), like Beat Repeat's `Pitch`, `Volume`/`Decay` and `Filter` controls. Each has a page for its two main values followed by a page for its LFO (`E2` LFO rate, `E3` LFO depth). The dot next to `Freq` shows if the filter is on, the dot next to `Rate` blinks with the LFO.
 
 | Page | Param | Description | Values |
 | ---- | ---- | ------------------------------------------------------------ | ---- |
 | `P5` | `Pitch` | Pitch of repeats. Recording always happens at normal speed, so captured audio isn't warped. | -24 – +24 semitones |
 | `P5` | `Pitch decay` | Semitones added to pitch on each repeat; negative values make repeats fall in pitch (Beat Repeat's `Pitch Decay`). Resets on each new capture. | -12 – +12 semitones |
-| `P6` | `Volume` | Level of repeats. | 0 – 100% |
-| `P6` | `Volume decay` | Level lost on each repeat, repeats fade out (Beat Repeat's `Decay`). Resets on each new capture. | 0 – 100% |
-| `P7` | `Filter freq` | Center frequency of the band-pass filter. | 20 Hz – 20 kHz |
-| `P7` | `Filter width` | Width of the band-pass filter, narrow (resonant) to wide. | 1 – 100% |
+| `P7` | `Volume` | Level of repeats. | 0 – 100% |
+| `P7` | `Volume decay` | Level lost on each repeat, repeats fade out (Beat Repeat's `Decay`). Resets on each new capture. | 0 – 100% |
+| `P9` | `Filter freq` | Center frequency of the band-pass filter. | 20 Hz – 20 kHz |
+| `P9` | `Filter width` | Width of the band-pass filter, narrow (resonant) to wide. | 1 – 100% |
 | | `Filter` | Turns the band-pass filter on or off (params menu only). | `off` or `on` (default `off`) |
 
 **Modulation**
 
-Every FX param has an LFO, set within the `REPEAT FX` params group (or by holding `K3` on its page).
+Every FX param has an LFO, with rate and depth on the page after its FX (`P6`, `P8`, `P10`). Shape is set within the `REPEAT FX` params group.
 
 | Param | Description | Values |
 | ---- | ------------------------------------------------------------ | ---- |

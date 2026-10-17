@@ -9,7 +9,7 @@
 -- E1    Cycle through params
 -- E4    BPM [Fates only]
 -- E2-E3 Adjust highlight params
--- K3    (hold) P5-P7 LFO
+-- P5-P10 FX & their LFOs
 -- E3    P4 dry/wet mix
 --
 -- S-S-S-S-Stutter and
@@ -50,14 +50,22 @@ end
 -- Index of BAR_VALS that triggers detail view (1 bar)
 local BAR_VALS_DETAIL_RES = 11 
 
--- Repeat FX pages; E2/E3 edit `main`/`second`, or LFO rate/depth while K3 held
+-- Repeat FX pages; E2/E3 edit `ids`. Each FX has a page for its main params
+-- followed by one for its LFO, both shown on the same screen row.
+local FX_FIRST_PAGE = 5
 local FX_PAGES = {
-  [5] = { target = "pitch", main = "pitch", second = "pitch_decay",
+  [5] = { target = "pitch", ids = {"pitch", "pitch_decay"},
     labels = {"Pitch", "Decay"} },
-  [6] = { target = "volume", main = "volume", second = "volume_decay",
+  [6] = { target = "pitch", ids = {"pitch_lfo_rate", "pitch_lfo_depth"},
+    labels = {"Rate", "Depth"} },
+  [7] = { target = "volume", ids = {"volume", "volume_decay"},
     labels = {"Volume", "Decay"} },
-  [7] = { target = "filter", main = "filter_freq", second = "filter_width",
+  [8] = { target = "volume", ids = {"volume_lfo_rate", "volume_lfo_depth"},
+    labels = {"Rate", "Depth"} },
+  [9] = { target = "filter", ids = {"filter_freq", "filter_width"},
     labels = {"Freq", "Width"} },
+  [10] = { target = "filter", ids = {"filter_lfo_rate", "filter_lfo_depth"},
+    labels = {"Rate", "Depth"} },
 }
 
 
@@ -508,7 +516,6 @@ end
 function enc(index, delta)
   if index == 1 then
     ui.page_delta(delta)
-    fx.shift = false
   end
 
   if (#norns.encoders.accel == 4) then
@@ -550,11 +557,9 @@ function enc(index, delta)
       params:delta("mix", delta)
     end
   elseif FX_PAGES[ui.page_get()] then
-    local fx_page = FX_PAGES[ui.page_get()]
-    if index == 2 then
-      params:delta(fx.shift and (fx_page.target .. "_lfo_rate") or fx_page.main, delta)
-    elseif index == 3 then
-      params:delta(fx.shift and (fx_page.target .. "_lfo_depth") or fx_page.second, delta)
+    local ids = FX_PAGES[ui.page_get()].ids
+    if index == 2 or index == 3 then
+      params:delta(ids[index - 1], delta)
     end
   end
   
@@ -567,9 +572,6 @@ end
 function key(index, state)
   if index == 2 and state == 1 then
     grid.reset_sum()
-  elseif index == 3 and state == 1 and FX_PAGES[params:get("page")] then
-    -- hold K3 to edit LFO on FX pages
-    fx.shift = true
   elseif index == 3 and state == 1 then
     if params:get("page") == 2 then
       chance_prev = params:get("chance")
@@ -588,7 +590,6 @@ function key(index, state)
     end
   elseif index == 3 and state == 0 then
     -- restore regardless of page, K3 may have been pressed before E1 changed it
-    fx.shift = false
     if chance_prev ~= nil then
       params:set("chance", chance_prev)
       chance_prev = nil
@@ -756,23 +757,24 @@ local function fx_str(id)
   return val .. "%"
 end
 
---- Draws repeat FX values for current FX page (pages 5 - 7).
--- @tparam fx_page {table}  entry of FX_PAGES
+--- Draws an FX's main and LFO params, highlighting current page (pages 5 - 10).
+-- @tparam page {number}  current page, a key of FX_PAGES
 -- @tparam y {number}  Y-coordinate of the row
-local function draw_fx_params(fx_page, y)
-  local main_level = fx.shift and ui.OFF or ui.ON
-  local lfo_level = fx.shift and ui.ON or ui.OFF
-  local depth_id = fx_page.target .. "_lfo_depth"
-  local lfo_on = params:get(depth_id) > 0 and fx.lfo[fx_page.target].value > 0
+local function draw_fx_params(page, y)
+  local main_page = page - ((page - FX_FIRST_PAGE) % 2)
+  local main, lfo = FX_PAGES[main_page], FX_PAGES[main_page + 1]
+  local main_level = page == main_page and ui.ON or ui.OFF
+  local lfo_level = page == main_page and ui.OFF or ui.ON
+  local lfo_on = params:get(lfo.ids[2]) > 0 and fx.lfo[main.target].value > 0
   local filter_on = nil
-  if fx_page.target == "filter" then
+  if main.target == "filter" then
     filter_on = params:get("filter") == 2
   end
 
-  draw_cell(fx_page.labels[1], fx_str(fx_page.main), 2, y, main_level, main_level, filter_on)
-  draw_cell(fx_page.labels[2], fx_str(fx_page.second), (ui.VIEWPORT.width * .33) - 8, y, main_level, main_level)
-  draw_cell("Rate", fx_str(fx_page.target .. "_lfo_rate"), (ui.VIEWPORT.width * .63) - 8, y, lfo_level, lfo_level, lfo_on)
-  draw_cell("Depth", fx_str(depth_id), ui.VIEWPORT.width * .83, y, lfo_level, lfo_level)
+  draw_cell(main.labels[1], fx_str(main.ids[1]), 2, y, main_level, main_level, filter_on)
+  draw_cell(main.labels[2], fx_str(main.ids[2]), (ui.VIEWPORT.width * .33) - 8, y, main_level, main_level)
+  draw_cell(lfo.labels[1], fx_str(lfo.ids[1]), (ui.VIEWPORT.width * .63) - 8, y, lfo_level, lfo_level, lfo_on)
+  draw_cell(lfo.labels[2], fx_str(lfo.ids[2]), ui.VIEWPORT.width * .83, y, lfo_level, lfo_level)
 end
 
 --- Draws mode, mix and input values (page 4).
@@ -820,7 +822,7 @@ function redraw()
   draw_tempo()
   local y = draw_bars(24)
   if FX_PAGES[ui.page_get()] then
-    draw_fx_params(FX_PAGES[ui.page_get()], y + 8)
+    draw_fx_params(ui.page_get(), y + 8)
   elseif ui.page_get() == 4 then
     draw_io_params(y + 8)
   else

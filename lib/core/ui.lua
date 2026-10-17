@@ -13,7 +13,7 @@ local UI = {
   -- Default first page index.
   FIRST_PAGE = 0,
   -- Default last page index; e.g. total pages
-  LAST_PAGE = 7,
+  LAST_PAGE = 10,
   -- Current active page
   active_page = 0
 }

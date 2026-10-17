@@ -53,12 +53,12 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 |         |                               |                                           |                                |
 | 5       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
 | 5       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
-| 6       | E2                            | volume of repeats                         | 0 - 100%                       |
-| 6       | E3                            | volume decay per repeat                   | 0 - 100%                       |
-| 7       | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
-| 7       | E3                            | band-pass filter width                    | 1 - 100%                       |
-| 5 - 7   | K3 (hold) + E2                | LFO rate                                  | 1/256 - 4                      |
-| 5 - 7   | K3 (hold) + E3                | LFO depth                                 |                                |
+| 7       | E2                            | volume of repeats                         | 0 - 100%                       |
+| 7       | E3                            | volume decay per repeat                   | 0 - 100%                       |
+| 9       | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
+| 9       | E3                            | band-pass filter width                    | 1 - 100%                       |
+| 6, 8, 10 | E2                           | pitch, volume, filter LFO rate            | 1/256 - 4                      |
+| 6, 8, 10 | E3                           | pitch, volume, filter LFO depth           |                                |
 
 
 ## Development
@@ -82,9 +82,9 @@ $ git merge origin/primary
 
 ## Changelog
 - v0.10.x
-    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P7`)
+    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P10`)
     - Added pitch decay and volume decay per repeat
-    - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat); hold `K3` to edit
+    - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat), each on its own page
     - Added dry/wet `Mix` (`P4` `E3`) and `Input` stereo/mono param
 - v0.9.x
     - Updated for latest norns firmware

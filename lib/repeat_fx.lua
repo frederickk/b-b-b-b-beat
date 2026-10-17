@@ -10,8 +10,6 @@ local RepeatFx = {
   PARAM_COUNT = 16,
   --- Repeats since last capture; drives decay and "rand/rpt" LFO shape.
   repeat_n = 0,
-  --- True while K3 is held on an FX page, encoders then edit the LFO.
-  shift = false,
   --- LFOs per FX target.
   lfo = {
     pitch = mod.new_lfo(),
