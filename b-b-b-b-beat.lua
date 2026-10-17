@@ -1,6 +1,6 @@
 --
 -- B-B-B-B-Beat
--- 0.9.2
+-- 0.10.0
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
@@ -9,6 +9,8 @@
 -- E1    Cycle through params
 -- E4    BPM [Fates only]
 -- E2-E3 Adjust highlight params
+-- P5-P10 FX & their LFOs
+-- E3    P4 dry/wet mix
 --
 -- S-S-S-S-Stutter and
 -- g-g-g-g-glitch till your
@@ -20,7 +22,7 @@
 --
 
 --- constants
-local VERSION = "0.9.2"
+local VERSION = "0.10.0"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256, ppq = 64 },  -- [1]
@@ -45,14 +47,36 @@ for i = 1, #BAR_VALS do
   BAR_VALS_STR[i] = BAR_VALS[i].str
 end
 
+-- Seconds the screen glitches for after an audible glitch
+local GLITCH_UI_HOLD = 0.1
+
 -- Index of BAR_VALS that triggers detail view (1 bar)
 local BAR_VALS_DETAIL_RES = 11 
+
+-- Repeat FX pages; E2/E3 edit `ids`. Each FX has a page for its main params
+-- followed by one for its LFO, both shown on the same screen row.
+local FX_FIRST_PAGE = 5
+local FX_PAGES = {
+  [5] = { target = "pitch", ids = {"pitch", "pitch_decay"},
+    labels = {"Pitch", "Decay"} },
+  [6] = { target = "pitch", ids = {"pitch_lfo_rate", "pitch_lfo_depth"},
+    labels = {"Rate", "Depth"} },
+  [7] = { target = "volume", ids = {"volume", "volume_decay"},
+    labels = {"Volume", "Decay"} },
+  [8] = { target = "volume", ids = {"volume_lfo_rate", "volume_lfo_depth"},
+    labels = {"Rate", "Depth"} },
+  [9] = { target = "filter", ids = {"filter_freq", "filter_width"},
+    labels = {"Freq", "Width"} },
+  [10] = { target = "filter", ids = {"filter_lfo_rate", "filter_lfo_depth"},
+    labels = {"Rate", "Depth"} },
+}
 
 
 local fileselect = require 'fileselect'
 local mathh = include("lib/math_helper")
 local passthrough = include("lib/passthrough")
 local ui = include("lib/core/ui")
+local fx = include("lib/repeat_fx")
 
 local grid = include("lib/core/grid")
 grid.name = "Grid"
@@ -63,18 +87,24 @@ interval.name = "Interval"
 interval.index = 12 -- init/default: 2 bars
 
 --- Defaults
-local bpm = 60
 local beat_div = BAR_VALS[1].value --grid.index].value
 local loop_len = 0
 local tape_len = 0
 local update_id
+local redraw_metro
+local chance_prev
+local glitch_prev
+local fx_id
+local glitch_rate = {1, 1} -- per voice playback rate multiplier from glitch
 
 --- States
 local is_recording = true
 local selecting_file = false
-local update_tempo = true
-local update_chance = false
+local is_repeating = false -- Chance fired on current grid step
+local glitch_ui_until = 0 -- util.time() the screen glitch ends
+local loop_index -- index of BAR_VALS the Softcut loop is set to
 local update_stutter = false
+local is_stuttering = false
 local update_variation = false
 local update_glitch = false
 
@@ -93,13 +123,62 @@ local function rand_occurrence(param_pct, val)
 end
 
 --- Sets loop length based on grid length and tempo.
-local function set_loop_len()
+-- @tparam index {number}  Optional index of BAR_VALS; default grid length
+local function set_loop_len(index)
+  loop_index = index or grid.index or 1
   if tape_len <= 0 then -- changing loop length of a loaded sample, stops the sample from playing
-    loop_len = (BAR_VALS[(grid.index or 1)].value / params:get("clock_tempo")) * 60
+    loop_len = (BAR_VALS[loop_index].value / clock.get_tempo()) * 60
     for voice = 1, 2 do
       softcut.loop_end(voice, loop_len)
     end
-  end 
+  end
+end
+
+--- Returns index of a random length 1 to `max_halvings` halvings shorter
+-- than given grid length, or given index when no shorter length exists.
+-- Only exact halvings, so the shorter loop repeats evenly within a grid step.
+-- @tparam index {number}  index of BAR_VALS
+-- @tparam max_halvings {number}
+local function vary_index(index, max_halvings)
+  local options = {}
+  for halvings = 1, max_halvings do
+    local target = BAR_VALS[index].value / (2 ^ halvings)
+    for i = 1, index - 1 do
+      if math.abs(BAR_VALS[i].value - target) < 1e-9 then
+        options[#options + 1] = i
+      end
+    end
+  end
+
+  if #options == 0 then
+    return index
+  end
+
+  return options[math.random(#options)]
+end
+
+--- Returns true when repeats should be silent: in live mode between repeats
+-- (Chance didn't fire), or during a glitch stutter.
+local function is_wet_muted()
+  return is_stuttering or (tape_len <= 0 and not is_repeating)
+end
+
+--- Returns true on the first clock tick at or after `pos`, measured from the
+-- start of the interval. Clock ticks are 1/256 bar, so triplet lengths like
+-- 1/96 never land on a tick exactly; this fires on the tick that passes them.
+-- @tparam sum {number}  current position in bars, e.g. grid.sum
+-- @tparam pos {number}  target position in bars
+local function passes(sum, pos)
+  local eps = 1e-9
+  return sum >= pos - eps and sum - beat_div < pos - eps
+end
+
+--- Returns true on the first clock tick of each step of length `step`.
+-- @tparam sum {number}  current position in bars, e.g. grid.sum
+-- @tparam step {number}  step length in bars
+local function is_step_start(sum, step)
+  local eps = 1e-9
+  return math.floor((sum + eps) / step) ~= math.floor((sum - beat_div + eps) / step)
 end
 
 --- Starts recording into Softcut.
@@ -110,6 +189,7 @@ local function start_rec()
     is_recording = true
     softcut.buffer_clear()
   end
+  fx.reset_repeats()
 
   for voice = 1, 2 do
     softcut.position(voice, 1)
@@ -133,96 +213,94 @@ local function update()
     clock.sync(beat_div * 4)
 
     -- randomize occurrence booleans
-    update_chance = rand_occurrence(params:get("chance"), true)
     update_stutter = rand_occurrence(params:get("glitch"), true)
-    if (params:get("variation") > 0) then
-      update_variation = rand_occurrence(params:get("variation") * 10, true)
-    end
     update_glitch = rand_occurrence(params:get("glitch"), true)
-
-    grid_index_prev = grid.index
 
     -- record incoming audio
     local offset_val = (params:get("offset") / 16)
     if (grid.sum == offset_val or grid.sum >= BAR_VALS[interval.get()].value) then
       start_rec()
-    elseif (grid.sum - offset_val == BAR_VALS[grid.index].value) then
+    elseif passes(grid.sum, offset_val + BAR_VALS[grid.index].value) then
       stop_rec()
     end
 
     -- bang on beat as set by grid length
-    if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
-      update_tempo = not update_tempo
+    if is_step_start(grid.sum, BAR_VALS[grid.index].value) then
       grid.increment_pos(1)
 
-      -- variation
-      if update_variation then
-        local vari = params:get("variation")
-        local vari_rand = mathh.random_int(-vari - 1, vari)
-      
-        grid.index = util.clamp(grid.index * vari_rand, 1, grid_index_prev)
-        set_loop_len()
+      -- rolled once per step so on-screen signals hold for the whole step
+      local vari = params:get("variation")
+      update_variation = vari > 0 and rand_occurrence(vari * 10, true)
+      local update_chance = rand_occurrence(params:get("chance"), true)
 
-        for voice = 1, 2 do
-          softcut.position(voice, 1)
-        end
+      -- variation: shorter loop for this step only, higher values shrink more
+      local index = grid.index
+      if update_variation then
+        index = vary_index(index, math.ceil(vari / 3))
+      end
+      if index ~= loop_index then
+        set_loop_len(index)
       end
 
       -- chance
-      if update_chance and not is_recording then
+      is_repeating = update_chance and not is_recording
+      if is_repeating then
+        -- count only repeats that fire, otherwise decay runs down on grid
+        -- steps Chance skipped and repeats are near silent when they play
+        fx.increment_repeats()
         for voice = 1, 2 do
           softcut.play(voice, 1)
           softcut.position(voice, 1)
         end
         audio.level_adc(0)
       else
-        if tape_len <= 0 then -- when playing a sample, just let it play when repeat not triggered
-          for voice = 1, 2 do
-            -- softcut.play(voice, 0)
-          end
-        end
         audio.level_adc(1)
       end
 
-      if (params:get("glitch_stutter") == 1 and update_stutter) then
-        audio.level_cut(0)
-      else
-        audio.level_cut(1)
-      end
+      is_stuttering = (params:get("glitch_stutter") == 1 and update_stutter)
+      fx.apply_level(is_wet_muted(), true)
 
       -- reset occurrence booleans to default
-      update_chance = false
       update_stutter = false
-      update_variation = false
       update_glitch = false
     end
 
     -- glitch
     if update_glitch and not is_recording then
+      if not is_wet_muted() then
+        -- hold long enough for the 30 fps screen to show what's heard
+        glitch_ui_until = util.time() + GLITCH_UI_HOLD
+      end
       for voice = 1, 2 do
         softcut.play(voice, 1)
         softcut.position(voice, (math.random() * loop_len))
         
         local randomize_rate = rand_occurrence(params:get("glitch"), true)
-        random_rate = (math.random() * params:get("glitch") / 10) * mathh.random(-params:get("glitch") / 100, params:get("glitch") / 100)
+        local random_rate = (math.random() * params:get("glitch") / 10) * mathh.random(-params:get("glitch") / 100, params:get("glitch") / 100)
         if randomize_rate then
-          softcut.rate(voice, random_rate)
+          glitch_rate[voice] = random_rate
         end
       end
     else
-      for voice = 1, 2 do
-        softcut.rate(voice, 1)
-      end
+      glitch_rate = {1, 1}
     end
+    fx.apply_rate(is_recording, glitch_rate)
 
     grid.increment_sum(beat_div)
 
     if (grid.sum >= BAR_VALS[interval.get()].value) then
       grid.reset_sum()
     end
+  end
+end
 
-    -- reset beat_div value
-    grid.index = grid_index_prev
+--- Handler for repeat FX, applies LFO movement between clock ticks.
+local function update_fx()
+  while true do
+    clock.sleep(1 / 30)
+    fx.apply_rate(is_recording, glitch_rate)
+    fx.apply_level(is_wet_muted())
+    fx.apply_filter()
   end
 end
 
@@ -255,14 +333,37 @@ function interval.update(val)
   end
 end
 
---- Init Softcut.
-local function init_softcut()
+--- Routes input into Softcut, overriding system mixer (restored on cleanup).
+-- Must run after `params:bang()`, which re-applies stored mixer levels and
+-- would otherwise silence Softcut's input if "input adc" is at -inf.
+--- Sets dry (monitor) and wet (Softcut) levels from "mix" param.
+-- Both are at unity at 50%, so the midpoint matches the unmixed signal.
+local function apply_mix()
+  local mix = params:get("mix") / 100
+  audio.level_monitor(math.min(1, 2 * (1 - mix)))
+  audio.level_cut(math.min(1, 2 * mix))
+end
+
+--- Routes ADC channels into Softcut voices from "input" param.
+-- Mono feeds input 1 to both voices so repeats play on both sides.
+local function apply_input()
+  local is_mono = params:get("input") == 2
+  for voice = 1, 2 do
+    softcut.level_input_cut(1, voice, (is_mono or voice == 1) and 1 or 0)
+    softcut.level_input_cut(2, voice, (not is_mono and voice == 2) and 1 or 0)
+  end
+end
+
+local function init_audio()
   audio.level_adc(1) -- input volume 1
   audio.level_adc_cut(1) -- ADC to Softcut input
-  audio.level_cut(1) -- Softcut master level (same as in LEVELS screen)
-  audio.level_cut_rev(0) -- Softcut reverb level 0
-  audio.rev_off() -- disable reverb
+  audio.level_cut_rev(0) -- Softcut reverb send 0
+  apply_mix()
+  apply_input()
+end
 
+--- Init Softcut.
+local function init_softcut()
   if tape_len <= 0 then
     softcut.buffer_clear() -- clear Softcut buffer
   end
@@ -281,7 +382,6 @@ local function init_softcut()
     end
 
     softcut.position(voice, 1) -- voice 1 loop position @ 0.0s
-    softcut.level_input_cut(voice, voice, 1) -- Softcut input level ch 1
     softcut.pre_level(voice, 1) -- voice 1 overdub level
     softcut.rec_level(voice, 1) -- voice 1 record level
     softcut.rec(voice, 1) -- voice 1 enable record
@@ -294,7 +394,7 @@ end
 
 --- Init Midi.
 -- TODO(frederickk): Add ability to repeat Midi input with Midi output.
-function init_midi()
+local function init_midi()
   passthrough.init()
 end
 
@@ -308,13 +408,19 @@ function clock.transport.stop()
   grid.reset_sum() 
 end
 
+--- Handler when clock tempo changes (internal, MIDI, Link or crow).
+function clock.tempo_change_handler(tempo)
+  set_loop_len()
+end
+
 --- Init Metro.
-function init_metro()
-  counter = metro.init()
-  counter.time = BAR_VALS[1].value * 4 -- sync is set to fastest possible 1/128
-  counter.count = -1
-  counter.event = update_metro
-  counter:start()
+local function init_metro()
+  redraw_metro = metro.init(update_metro, 1 / 30, -1) -- 30 fps screen refresh
+  if redraw_metro then
+    redraw_metro:start()
+  else
+    print("b-b-b-b-beat: no free metros for screen redraw")
+  end
 end
 
 --- Handler for loading sample into softcut.
@@ -322,14 +428,26 @@ end
 local function load_file(file)
   selecting_file = false
 
-  if file ~= "cancel" and params:get("mode") == 2 then
-    is_recording = false
+  if file ~= nil and file ~= "cancel" and file ~= "-" and params:get("mode") == 2 then
     local ch, samples = audio.file_info(file)
+    if ch == nil or ch < 1 or samples == nil or samples <= 0 then
+      print("b-b-b-b-beat: unable to read " .. file)
+      return
+    end
+
+    is_recording = false
+    -- Softcut copies frames into its 48 kHz buffer without resampling, so
+    -- buffer length is frames / 48000 whatever the file's own rate
     tape_len = samples / 48000
 
     grid.reset_sum()
     softcut.buffer_clear()
-    softcut.buffer_read_stereo(file, 0, 1, -1)
+    if ch == 1 then
+      softcut.buffer_read_mono(file, 0, 1, -1, 1, 1)
+      softcut.buffer_read_mono(file, 0, 1, -1, 1, 2)
+    else
+      softcut.buffer_read_stereo(file, 0, 1, -1)
+    end
     init_softcut()
 
     for voice = 1, 2 do
@@ -350,6 +468,7 @@ local function init_params()
         selecting_file = false
         tape_len = 0
         grid.reset_sum()
+        set_loop_len()
       elseif val == 2 then
         if params:get("sample") ~= "-" and params:get("sample") ~= nil then
           load_file(params:get("sample"))
@@ -363,7 +482,15 @@ local function init_params()
   params:add_file("sample", "Audio file")
   params:set_action("sample", load_file)
 
-  params:add_separator()
+  params:add_option("input", "Input", {"stereo", "mono"}, 1)
+  params:set_action("input", apply_input)
+
+  -- dry/wet balance, 50% leaves both at unity
+  params:add_number("mix", "Mix", 0, 100, 50,
+    function(param) return param:get() .. "%" end)
+  params:set_action("mix", apply_mix)
+
+  params:add_separator("repeat_separator", "Repeat")
 
   -- loop duration (Beat Repeat: interval)
   interval.add_params(BAR_VALS_STR, interval.index)
@@ -397,18 +524,8 @@ local function init_params()
   params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 1)
   params:add_option("glitch_stutter", "Glitch stutter", {"yes", "no"}, 2)
 
-  -- wrapper for listening to and setting global BPM
-  params:add_number("bpm", "bpm", 1, 300, bpm)
-  params:set_action("bpm",
-    function(val)
-      bpm = val
-      params:set("clock_tempo", val)
-      grid.set(grid.index)
-      interval.set(interval.index)
-    end)
-  params:hide("bpm")
-
-  params:add_separator()
+  -- pitch, volume and filter of repeats (Beat Repeat: Pitch, Volume, Filter)
+  fx.add_params(BAR_VALS, BAR_VALS_DETAIL_RES)
 
   -- trigger param defaults
   params:bang()
@@ -424,9 +541,12 @@ function init()
   init_midi()
   init_softcut()
   init_params()
+  init_audio()
   init_metro()
+  fx.init_softcut()
 
   update_id = clock.run(update)
+  fx_id = clock.run(update_fx)
 
   screen.level(15)
   screen.aa(0)
@@ -441,16 +561,16 @@ function enc(index, delta)
     ui.page_delta(delta)
   end
 
-  if (#norns.encoders.accel == 4) then
+  if ui.HAS_E4 then
     -- Fates only; persistent BPM adjustment
     if index == 4 then
-      params:delta("bpm", delta)
+      params:delta("clock_tempo", delta)
     end
   else
     -- Norns; BPM only on page 0
     if ui.page_get() == 0 then
       if index == 2 then
-        params:delta("bpm", delta)
+        params:delta("clock_tempo", delta)
       end
     end
   end
@@ -476,6 +596,13 @@ function enc(index, delta)
   elseif ui.page_get() == 4 then
     if index == 2 then
       params:delta("mode", delta)
+    elseif index == 3 then
+      params:delta("mix", delta)
+    end
+  elseif FX_PAGES[ui.page_get()] then
+    local ids = FX_PAGES[ui.page_get()].ids
+    if index == 2 or index == 3 then
+      params:delta(ids[index - 1], delta)
     end
   end
   
@@ -489,34 +616,77 @@ function key(index, state)
   if index == 2 and state == 1 then
     grid.reset_sum()
   elseif index == 3 and state == 1 then
-    chance_prev = params:get("chance")
-    glitch_prev = params:get("glitch")
-
     if params:get("page") == 2 then
+      chance_prev = params:get("chance")
       params:set("chance", 0)
     elseif params:get("page") == 3 then
+      glitch_prev = params:get("glitch")
       params:set("glitch", 100)
     elseif params:get("page") == 4 and params:get("mode") == 2 then
       selecting_file = true
-      fileselect.enter(_path.tape, load_file)
+      fileselect.enter(_path.audio, function(file)
+        selecting_file = false
+        if file ~= "cancel" then
+          params:set("sample", file) -- triggers load_file and saves with PSET
+        end
+      end)
+    end
+  elseif index == 3 and state == 0 then
+    -- restore regardless of page, K3 may have been pressed before E1 changed it
+    if chance_prev ~= nil then
+      params:set("chance", chance_prev)
+      chance_prev = nil
+    end
+    if glitch_prev ~= nil then
+      params:set("glitch", glitch_prev)
+      glitch_prev = nil
     end
   end
-  
-  if state == 0 then
-    params:set("glitch", glitch_prev)
-    params:set("chance", chance_prev)
-  end
+end
+
+--- Returns true when the UI glitch effect should be drawn.
+local function is_ui_glitching()
+  return (params:get("glitch_ui") == 1) and util.time() < glitch_ui_until
 end
 
 --- Returns px value for shifting UI.
 local function glitch_shift_px()
-  if (params:get("glitch_ui") == 1) and update_glitch and not is_recording then
+  if is_ui_glitching() then
     local glitch_val = math.random() * ((params:get("glitch") / 1000))
 
     return (1 + (mathh.random(-1, 1) * glitch_val))
   end
 
   return 1
+end
+
+--- Scales a screen coordinate by the current glitch shift (1 when not glitching).
+-- @tparam v {number}  coordinate value
+local function g(v)
+  return v * glitch_shift_px()
+end
+
+--- Draws label with value and optional signal.
+-- @tparam label {string}
+-- @tparam value {string}
+-- @tparam x {number}
+-- @tparam y {number}
+-- @tparam label_level {number}  brightness of label
+-- @tparam value_level {number}  brightness of value and signal
+-- @tparam bool {boolean}  Optional boolean to trigger signal
+local function draw_cell(label, value, x, y, label_level, value_level, bool)
+  screen.level(label_level)
+  screen.move(g(x), g(y + 10))
+  screen.text(string.sub(label, 1, 6))
+
+  screen.level(value_level)
+  if (bool ~= nil) then
+    ui.signal(g(x + 3), g(y), bool)
+    screen.move(g(x + 8), g(y + 2))
+  else
+    screen.move(g(x), g(y + 2))
+  end
+  screen.text(value)
 end
 
 --- Draws given param with signal and value.
@@ -527,151 +697,199 @@ end
 -- @tparam suffix {string}  Optional suffix for display value
 -- @tparam bool {boolean}  Boolean to trigger signal
 local function draw_param(name, page, x, y, suffix, bool)
-  ui.highlight({page}, ui.ON, 0)
-  screen.move(x * glitch_shift_px() , (y + 10) * glitch_shift_px())
-  screen.text(string.sub(name, 1, 6))
-
-  ui.highlight({page})
-  if (bool ~= nil) then
-    ui.signal((x + 3) * glitch_shift_px(), y * glitch_shift_px(), bool)
-    screen.move((x + 8) * glitch_shift_px(), (y + 2) * glitch_shift_px())
-  else
-    screen.move(x * glitch_shift_px(), (y + 2) * glitch_shift_px())
-  end
-  screen.text(params:get(string.lower(name)) .. (suffix or ""))
+  local is_active = ui.page_get() == page
+  draw_cell(name, params:get(string.lower(name)) .. (suffix or ""), x, y,
+    is_active and ui.ON or 0, is_active and ui.ON or ui.OFF, bool)
 end
 
 --- Displays string for BAR_VAL selected.
 -- @tparam index {number}  index of length value 
 -- @tparam str {number}  prefix
-function str_note_bar(index, str)
+local function str_note_bar(index, str)
   if index < BAR_VALS_DETAIL_RES then return (str or "") .. " Note"
   elseif index == BAR_VALS_DETAIL_RES then return (str or "") .. " Bar"
   else return (str or "") .. " Bars" end
 end
 
+--- Draws tempo indicator and value (page 0).
+local function draw_tempo()
+  local page = 0
+  if ui.HAS_E4 then screen.level(ui.ON)
+  else ui.highlight({page}) end
+  -- swings once per bar, independent of grid length
+  local is_even_bar = math.floor(clock.get_beats() / 4) % 2 == 0
+  ui.metro_icon(g(5), 5, is_even_bar)
+  screen.move(g(20), g(10))
+  screen.text(util.round(clock.get_tempo()))
+end
+
+--- Draws interval and grid length markers (page 1).
+-- @tparam bar_y {number}  Y-coordinate of the bar
+-- @treturn number  Y-coordinate below the grid label, for following rows
+local function draw_bars(bar_y)
+  local page = 1
+  local width = interval.ui.width
+  local interval_val = BAR_VALS[interval.get()].value
+  local grid_val = BAR_VALS[grid.index].value
+  -- at 1 bar or less, the bar is drawn as a single detailed bar
+  local is_detail = interval.get() <= BAR_VALS_DETAIL_RES
+  local scale = is_detail and (width * 4) or width
+  local div = is_detail and (interval_val / grid_val) or nil
+
+  -- interval length marker(s)
+  local interval_w = (is_detail and scale or (width * interval_val)) / 4
+
+  screen.level(2)
+  if not is_detail then
+    interval.draw(g(2), g(bar_y), 4)
+  end
+
+  ui.highlight({page})
+  interval.draw(g(2), g(bar_y), div, g(interval_w))
+  screen.move(g(interval_w), g(bar_y - 3))
+  screen.text_right(str_note_bar(interval.get(), BAR_VALS[interval.get()].str))
+
+  -- grid length marker(s)
+  local grid_w = div and (width / div) or (scale * grid_val / 4)
+  local label_y = bar_y + grid.ui.height + 7
+
+  if is_repeating then
+    screen.level(ui.ON)
+  else
+    ui.highlight({page})
+  end
+  grid.draw_span(g(2 + ((grid.pos - 1) * grid_w)), g(bar_y), grid_w)
+
+  -- offset marker, in 1/16 note steps
+  local offset_x = 2 + (scale * BAR_VALS[7].value * params:get("offset")) / 4
+
+  ui.highlight({page})
+  grid.draw_span(g(offset_x), g(bar_y), grid_w)
+  screen.move(g(offset_x), g(label_y))
+  screen.text(str_note_bar(grid.get(), BAR_VALS[grid.index].str))
+
+  return label_y
+end
+
+--- Draws offset, chance, variation and glitch values (pages 2 & 3).
+-- @tparam y {number}  Y-coordinate of the row
+local function draw_params(y)
+  draw_param("Offset", 2, 2, y, "/16")
+  draw_param("Chance", 2, (ui.VIEWPORT.width * .33) - 8, y, "%", is_repeating)
+  draw_param("Variation", 3, (ui.VIEWPORT.width * .63) - 8, y, "", update_variation)
+  draw_param("Glitch", 3, ui.VIEWPORT.width * .83, y, "%", util.time() < glitch_ui_until)
+end
+
+--- Returns display string for repeat FX param.
+-- @tparam id {string}  param id
+local function fx_str(id)
+  local val = params:get(id)
+
+  if id == "pitch" then
+    return string.format("%+dst", val)
+  elseif id == "pitch_decay" then
+    return string.format("%+.2f", val)
+  elseif id == "filter_freq" then
+    return fx.format_freq(val)
+  elseif string.find(id, "_lfo_rate$") then
+    return BAR_VALS[val].str
+  elseif id == "pitch_lfo_depth" or id == "filter_lfo_depth" then
+    return string.format("%.2f", val)
+  end
+
+  return val .. "%"
+end
+
+--- Draws an FX's main and LFO params, highlighting current page (pages 5 - 10).
+-- @tparam page {number}  current page, a key of FX_PAGES
+-- @tparam y {number}  Y-coordinate of the row
+local function draw_fx_params(page, y)
+  local main_page = page - ((page - FX_FIRST_PAGE) % 2)
+  local main, lfo = FX_PAGES[main_page], FX_PAGES[main_page + 1]
+  local main_level = page == main_page and ui.ON or ui.OFF
+  local lfo_level = page == main_page and ui.OFF or ui.ON
+  local lfo_on = params:get(lfo.ids[2]) > 0 and fx.lfo[main.target].value > 0
+  local filter_on = nil
+  if main.target == "filter" then
+    filter_on = params:get("filter") == 2
+  end
+
+  draw_cell(main.labels[1], fx_str(main.ids[1]), 2, y, main_level, main_level, filter_on)
+  draw_cell(main.labels[2], fx_str(main.ids[2]), (ui.VIEWPORT.width * .33) - 8, y, main_level, main_level)
+  draw_cell(lfo.labels[1], fx_str(lfo.ids[1]), (ui.VIEWPORT.width * .63) - 8, y, lfo_level, lfo_level, lfo_on)
+  draw_cell(lfo.labels[2], fx_str(lfo.ids[2]), ui.VIEWPORT.width * .83, y, lfo_level, lfo_level)
+end
+
+--- Draws mode, mix and input values (page 4).
+-- @tparam y {number}  Y-coordinate of the row
+local function draw_io_params(y)
+  draw_cell("Mode", params:string("mode"), 2, y, ui.ON, ui.ON)
+  draw_cell("Mix", params:string("mix"), (ui.VIEWPORT.width * .33) - 8, y, ui.ON, ui.ON)
+  draw_cell("Input", params:string("input"), (ui.VIEWPORT.width * .63) - 8, y, ui.OFF, ui.OFF)
+end
+
+--- Draws live/sample mode indicators (page 4).
+local function draw_mode()
+  local center = ui.VIEWPORT.center
+  local is_live = params:get("mode") == 1
+
+  -- live input recording
+  if is_live then
+    screen.level(is_recording and ui.ON or ui.OFF)
+    screen.move(center - g(15), g(10))
+    screen.text("REC")
+  end
+  screen.level(is_live and ui.ON or ui.OFF)
+  ui.recording(center - g(20), g(10))
+
+  -- tape/sample input playback
+  screen.level(is_live and ui.OFF or ui.ON)
+  ui.tape_icon(center + g(10), g(10))
+
+  if params:get("sample") ~= "-" and params:get("sample") ~= nil then
+    screen.rect(center + g(8), g(4), 16, 8)
+    screen.stroke()
+  end
+end
+
 --- Handler for screen redraw.
--- TODO(frederickk): Refactor for clarity and simplicity.
 function redraw()
-  if not update_glitch then	
+  -- skipping clear while glitching leaves trails on screen
+  if not is_ui_glitching() then
     screen.clear()
   end
 
   screen.level(ui.ON)
-
-  -- page marker
   ui.page_marker(15, 10, ui.page_get(), glitch_shift_px)
 
-  -- BPM
-  page = 0
-  if (#norns.encoders.accel == 4) then screen.level(ui.ON)
-  else ui.highlight({page}) end
-  ui.metro_icon(5 * glitch_shift_px(), 5, update_tempo)
-  screen.move(20 * glitch_shift_px(), 10 * glitch_shift_px())
-  screen.text(params:get("clock_tempo"))
-
-  local bar_y = 24
-  local grid_seg_num = (interval.ui.width * BAR_VALS[interval.get()].value / (interval.ui.width * BAR_VALS[grid.index].value))
-
-  page = 1
-  -- interval length marker(s)
-  local str = BAR_VALS[interval.get()].str
-  local w = interval.ui.width * BAR_VALS[interval.get()].value
-  if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    w = interval.ui.width * 4
-  end
-  local x = 2
-  local y = bar_y - 3
-
-  screen.level(2)
-  if (interval.get() > BAR_VALS_DETAIL_RES) then
-    interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), 4)
-  end
-
-  local div = nil
-  if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    div = BAR_VALS[interval.get()].value / BAR_VALS[grid.index].value
-  end
-  
-  ui.highlight({page})
-  interval.draw(x * glitch_shift_px(), bar_y * glitch_shift_px(), div, (w / 4) * glitch_shift_px())
-  screen.move((w / 4) * glitch_shift_px(), y * glitch_shift_px())
-  screen.text_right(str_note_bar(interval.get(), str))
-
-  -- grid length marker(s)
-  str = BAR_VALS[grid.index].str
-  w = interval.ui.width * BAR_VALS[grid.index].value
-  if (interval.get() <= BAR_VALS_DETAIL_RES) then
-    w = (interval.ui.width * 4) * BAR_VALS[grid.index].value
-  end
-  local grid_w = w / 4 
-  if div ~= nil then
-    grid_w = interval.ui.width / div
-  end
-
-  x = 2 + ((grid.pos - 1) * grid_w)
-  y = bar_y + grid.ui.height + 7
-
-  if update_chance then
-    screen.level(15)
+  draw_tempo()
+  local y = draw_bars(24)
+  if FX_PAGES[ui.page_get()] then
+    draw_fx_params(ui.page_get(), y + 8)
+  elseif ui.page_get() == 4 then
+    draw_io_params(y + 8)
   else
-    ui.highlight({page})
+    draw_params(y + 8)
   end
-
-  grid.draw_span(x * glitch_shift_px(), bar_y * glitch_shift_px(), grid_w)
-
-  ui.highlight({page})
-  local offset_w = (interval.ui.width * BAR_VALS[7].value) * params:get("offset")
-  if (interval.get() <= 11) then
-    offset_w = ((interval.ui.width * 4) * BAR_VALS[7].value) * params:get("offset")
-  end
-  grid.draw_span((2 + offset_w / 4) * glitch_shift_px(), bar_y * glitch_shift_px(), grid_w)
-  screen.move((2 + offset_w / 4) * glitch_shift_px(), y * glitch_shift_px())
-  screen.text(str_note_bar(grid.get(), str))
-
-  -- additional params
-  page = 2
-  draw_param("Offset", page, 2, y + 8, "/16")
-  draw_param("Chance", page, (ui.VIEWPORT.width * .33) - 8, y + 8, "%", update_chance)
-
-  page = 3
-  draw_param("Variation", page, (ui.VIEWPORT.width * .63) - 8, y + 8, "", update_variation)
-  draw_param("Glitch", page, ui.VIEWPORT.width * .83, y + 8, "%", update_glitch)
-
-  -- Live input recording 
-  page = 4
-  if params:get("mode") == 1 then
-    if is_recording then
-      screen.level(ui.ON)
-    else
-      screen.level(ui.OFF)
-    end
-    screen.move(ui.VIEWPORT.center - 15 * glitch_shift_px(), 10 * glitch_shift_px())
-    screen.text("REC")
-
-    screen.level(ui.ON)
-  else
-    screen.level(ui.OFF)
-  end
-  ui.recording(ui.VIEWPORT.center - 20 * glitch_shift_px(), 10 * glitch_shift_px())
-
-  -- Tape/sample input playback
-  if params:get("mode") == 2 then
-    screen.level(ui.ON)
-  else
-    screen.level(ui.OFF)
-  end
-  ui.tape_icon(ui.VIEWPORT.center + 10 * glitch_shift_px(), 10 * glitch_shift_px())
-
-  if params:get("sample") ~= "-" and params:get("sample") ~= nil then
-    screen.rect(ui.VIEWPORT.center + 8 * glitch_shift_px(), 4 * glitch_shift_px(), 16, 8)
-    screen.stroke()
-  end
+  draw_mode()
 
   screen.update()
 end
 
---- Writes params on script end.
+--- Restores system mixer params this script changes directly via `audio`.
+local function restore_mixer()
+  for _, id in ipairs({"input_level", "monitor_level", "softcut_level", "rev_cut_input", "cut_input_adc"}) do
+    if params.lookup[id] then
+      params:lookup_param(id):bang()
+    end
+  end
+end
+
+--- Writes params and restores mixer on script end.
 function cleanup()
-  params:write()
+  if redraw_metro then
+    redraw_metro:stop()
+  end
+  params:write(norns.state.pset_last)
+  restore_mixer()
 end

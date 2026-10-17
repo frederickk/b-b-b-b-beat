@@ -115,7 +115,7 @@ function Passthrough.build_scale()
 end
 
 function Passthrough.get_midi_devices()
-  d = {}
+  local d = {}
   for id, device in pairs(midi.vports) do
     d[id] = device.name
   end
@@ -137,7 +137,7 @@ function Passthrough.init()
 
   devices = Passthrough.get_midi_devices()
 
-  params:add_group("PASSTHROUGH", 8)
+  params:add_group("passthrough", "PASSTHROUGH", 8)
   params:add_option("midi_device", "Device", devices, 1) -- Value is actually 0 
   params:set_action("midi_device", function(value)
       midi_device.event = nil

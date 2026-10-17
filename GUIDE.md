@@ -1,7 +1,7 @@
 # B-B-B-B-Beat Guide
 ---
 
-v0.9.1
+v0.10.0
 
 ## Introduction
 
@@ -19,14 +19,16 @@ These params are visible on the display of Norns and can be directly adjusted us
 
 | Param     | Description                                                             | Values |
 | ---- | ------------------------------------------------------------ | ---- |
-| `Tempo` | This can be set either manually or synced to sources as defined within Norns [`CLOCK` menu](https://monome.org/docs/norns/clocks/#parameters). | 20 – 300 |
+| `Tempo` | This can be set either manually or synced to sources as defined within Norns [`CLOCK` menu](https://monome.org/docs/norns/clocks/#parameters). | 1 – 300 |
 | `Interval`     | This controls how often new material is captured and starts “repeating” it. This is always synced to the song’s tempo. | 1/256 notes – 4 bars |
 | `Grid` | This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts. | 1/256 notes – 4 bars |
 | `Offset` | This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way). | 0/16 notes – 15/16 notes |
-| `Chance` | This determines the likelihood of repetitions actually taking place when Interval and Offset ”ask” for them. If Chance is set to 100 percent, repetitions will always take place at the given Interval/Offset time; if set to zero, there will be no repetitions and input audio is passed through without effect. | 0 – 100% |
-| `Variation` | This modifies the grid size (using length defined by grid) change randomly. If variation is set to zero, the grid size is fixed. | 0 – 10 |
+| `Chance` | The likelihood of a repeat on each grid step. When a repeat fires, the captured slice restarts and the input is muted; when it doesn't, repeats are silent and input passes through without effect. At 100 percent every step repeats; at zero there are no repetitions. | 0 – 100% |
+| `Variation` | The likelihood (10% per step of Variation) that a grid step plays a shorter loop, so the repeat stutters faster within that step. Higher values also allow shorter loops: 1–3 halves the grid, 4–6 up to a quarter, 7–9 up to an eighth, 10 up to a sixteenth. At zero the grid size is fixed. | 0 – 10 |
 | `Glitch` | This determines the likelihood of glitching occurring and how intense the glitch effect will be. | 0 – 100% |
 | `Mode` | `Live`mode uses live audio input and `Sample` mode uses a chosen sample file (loading is done via the params menu). | `Live` or `Sample` |
+| `Mix` | Balance of dry input and repeats. At 50% both are at full level; lower values fade the repeats, higher values fade the dry input. | 0 – 100% |
+| `Input` | `Stereo` records inputs 1 and 2 to the left and right repeats. `Mono` records input 1 to both. Set in the params menu. | `Stereo` or `Mono` |
 
 
 **Hidden params**
@@ -35,9 +37,34 @@ These params are only listed within params menu.
 
 | Param     | Description                                                             | Values |
 | ---- | ------------------------------------------------------------ | ---- |
-|  `Glitch UI` | Toggle the glitching of the UI, this causes (intended) visual glitches more frequently and “violently” as the `Glitch` param gets closer to 100 | `yes` or `no` |
+|  `Glitch UI` | Toggle the glitching of the UI, this causes (intended) visual glitches more frequently and “violently” as the `Glitch` param gets closer to 100 | `yes` or `no` (default `yes`) |
 |  `Glitch stutter` | Toggle an audio stutter (e.g. random muting of audio) the likelihood of stutter occuring increases based on the `Glitch` command. | `yes` or `no` |
 
+
+
+### Repeat FX
+
+Pitch, volume and filter shape the repeats (Softcut playback), like Beat Repeat's `Pitch`, `Volume`/`Decay` and `Filter` controls. Each has a page for its two main values followed by a page for its LFO (`E2` LFO rate, `E3` LFO depth). The dot next to `Freq` shows if the filter is on, the dot next to `Rate` blinks with the LFO.
+
+| Page | Param | Description | Values |
+| ---- | ---- | ------------------------------------------------------------ | ---- |
+| `P5` | `Pitch` | Pitch of repeats. Recording always happens at normal speed, so captured audio isn't warped. | -24 – +24 semitones |
+| `P5` | `Pitch decay` | Semitones added to pitch on each repeat; negative values make repeats fall in pitch (Beat Repeat's `Pitch Decay`). Resets on each new capture. | -12 – +12 semitones |
+| `P7` | `Volume` | Level of repeats. | 0 – 100% |
+| `P7` | `Volume decay` | Level lost on each repeat, repeats fade out (Beat Repeat's `Decay`). Resets on each new capture. | 0 – 100% |
+| `P9` | `Filter freq` | Center frequency of the band-pass filter. | 20 Hz – 20 kHz |
+| `P9` | `Filter width` | Width of the band-pass filter, narrow (resonant) to wide. | 1 – 100% |
+| | `Filter` | Turns the band-pass filter on or off (params menu only). | `off` or `on` (default `off`) |
+
+**Modulation**
+
+Every FX param has an LFO, with rate and depth on the page after its FX (`P6`, `P8`, `P10`). Shape is set within the `REPEAT FX` params group.
+
+| Param | Description | Values |
+| ---- | ------------------------------------------------------------ | ---- |
+| `LFO rate` | Length of one LFO cycle, synced to tempo. | 1/256 notes – 4 bars |
+| `LFO shape` | `sine`, `triangle`, `saw` and `square` move smoothly/regularly; `s&h` jumps to a new random value each cycle; `rand/rpt` jumps to a new random value on **each repeat** (ignores rate). | |
+| `LFO depth` | Amount of modulation: semitones for pitch, % of volume (tremolo), octaves for filter frequency. `0` turns the LFO off. | pitch 0 – 24 st, volume 0 – 100%, filter 0 – 4 oct |
 
 
 ### Modes

@@ -1,7 +1,7 @@
 B-B-B-B-Beat
 ---
 
-v0.9.2
+v0.10.0
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
@@ -17,7 +17,7 @@ I'll post a brief demo showing B-B-B-B-Beat in action, soon.
 
 ## Requirements
 
-[Norns](https://monome.org/norns) or [Fates](https://llllllll.co/t/fates-a-diy-norns-dac-board-for-raspberry-pi/22999) or device. For Fates owners, BPM value can be persistently controlled using the 4th encoder, for Norns owners it's `E2` the first page `P0`
+[Norns](https://monome.org/norns) or [Fates](https://llllllll.co/t/fates-a-diy-norns-dac-board-for-raspberry-pi/22999) or device running a recent norns release (uses `clock.tempo_change_handler`). For Fates owners, BPM value can be persistently controlled using the 4th encoder, for Norns owners it's `E2` the first page `P0`. BPM adjusts the system clock tempo directly (`PARAMETERS > CLOCK`).
 
 
 ## Install/Update
@@ -34,7 +34,7 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 | All     | E1                            | Change page                               |                                |
 | All     | K2                            | Resync to beat 1                          |                                |
 |         |                               |                                           |                                |
-| 0       | E2 or E4                      | BPM                                       | 20 - 300                       |
+| 0       | E2 or E4                      | BPM                                       | 1 - 300                        |
 |         |                               |                                           |                                |
 | 1       | E2                            | Interval length                           | 1/256 - 4                      |
 | 1       | E2                            | Grid length                               | 1/256 - 4                      |
@@ -48,7 +48,17 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 | 3       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
 |         |                               |                                           |                                |
 | 4       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
+| 4       | E3                            | dry/wet mix (both full at 50%)            | 0 - 100%                       |
 | 4       | K3                            | load new sample                           | Any valid audio file           |
+|         |                               |                                           |                                |
+| 5       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
+| 5       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
+| 7       | E2                            | volume of repeats                         | 0 - 100%                       |
+| 7       | E3                            | volume decay per repeat                   | 0 - 100%                       |
+| 9       | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
+| 9       | E3                            | band-pass filter width                    | 1 - 100%                       |
+| 6, 8, 10 | E2                           | pitch, volume, filter LFO rate            | 1/256 - 4                      |
+| 6, 8, 10 | E3                           | pitch, volume, filter LFO depth           |                                |
 
 
 ## Development
@@ -71,7 +81,36 @@ $ git merge origin/primary
 
 
 ## Changelog
+- v0.10.x
+    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P10`)
+    - Added pitch decay and volume decay per repeat
+    - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat), each on its own page
+    - Added dry/wet `Mix` (`P4` `E3`) and `Input` stereo/mono param
+    - Each page now edits two params with `E2`/`E3`, no held keys
+    - `Chance` now mutes repeats on steps where it doesn't fire, so 0% is dry
+    - `Variation` now plays random shorter loops (exact halvings of `Grid`) for a step, instead of jumping to 1/256
+    - Tempo indicator swings once per bar instead of every grid step
+    - Screen glitch now follows audible glitches; `Glitch UI` on by default
+    - Fixed no audio being recorded when the system mixer's softcut `input adc` is at -inf
+    - Fixed volume and pitch decay counting grid steps where no repeat played
+    - Fixed band-pass filter level jumping by ~35 dB across `Width` (now unity gain)
+    - Fixed loop length for non-48kHz samples (Softcut doesn't resample)
+    - Fixed `Chance`/`Glitch` staying at 0%/100% when K3 is released on another page
+    - Fixed 3 encoder norns being treated as Fates (no `P0`, no BPM control)
+    - Fixed triplet lengths (`1/96`, `1/48`, `3` bars): recording never stopped so nothing repeated, and steps fell at the wrong times
 - v0.9.x
+    - Updated for latest norns firmware
+        - BPM controls system `clock_tempo` directly; script no longer resets tempo on load
+        - Loop length follows tempo changes from any clock source (`clock.tempo_change_handler`)
+        - System mixer levels (input, softcut, reverb send) restored when script exits
+        - Stutter mutes softcut voices instead of global softcut level
+        - PSETs written to last used slot instead of always overwriting slot 1
+        - Named param separators/group IDs
+    - Fixed screen smearing when `Glitch UI` is off
+    - Fixed crash when releasing K2 (or K3 on pages without a K3 action)
+    - Fixed mono sample loading
+    - K3 sample selection now updates (and saves) the `Audio file` param
+    - Removed leaked globals (incl. a stray global `init` in `lib/core/ui.lua`)
     - Added sample loading
     - Toggle live/sample mode in UI
     - Tweaked glitch effect
