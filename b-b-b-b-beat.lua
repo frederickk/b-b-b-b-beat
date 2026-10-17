@@ -412,7 +412,7 @@ local function init_params()
     end)
 
   -- glitchy params
-  params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 1)
+  params:add_option("glitch_ui", "Glitch UI", {"yes", "no"}, 2)
   params:add_option("glitch_stutter", "Glitch stutter", {"yes", "no"}, 2)
 
   -- trigger param defaults
@@ -522,9 +522,14 @@ function key(index, state)
   end
 end
 
+--- Returns true when the UI glitch effect should be drawn.
+local function is_ui_glitching()
+  return (params:get("glitch_ui") == 1) and update_glitch and not is_recording
+end
+
 --- Returns px value for shifting UI.
 local function glitch_shift_px()
-  if (params:get("glitch_ui") == 1) and update_glitch and not is_recording then
+  if is_ui_glitching() then
     local glitch_val = math.random() * ((params:get("glitch") / 1000))
 
     return (1 + (mathh.random(-1, 1) * glitch_val))
@@ -664,7 +669,7 @@ end
 --- Handler for screen redraw.
 function redraw()
   -- skipping clear while glitching leaves trails on screen
-  if not update_glitch then
+  if not is_ui_glitching() then
     screen.clear()
   end
 

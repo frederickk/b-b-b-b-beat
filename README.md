@@ -79,6 +79,7 @@ $ git merge origin/primary
         - Stutter mutes softcut voices instead of global softcut level
         - PSETs written to last used slot instead of always overwriting slot 1
         - Named param separators/group IDs
+    - Fixed screen smearing when `Glitch UI` is off; `Glitch UI` now off by default
     - Fixed crash when releasing K2 (or K3 on pages without a K3 action)
     - Fixed mono sample loading and sample length for non-48kHz files
     - K3 sample selection now updates (and saves) the `Audio file` param
