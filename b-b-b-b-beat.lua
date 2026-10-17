@@ -171,9 +171,6 @@ local function update()
     -- bang on beat as set by grid length
     if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
       grid.increment_pos(1)
-      if not is_recording then
-        fx.increment_repeats()
-      end
 
       -- variation
       if update_variation then
@@ -190,6 +187,9 @@ local function update()
 
       -- chance
       if update_chance and not is_recording then
+        -- count only repeats that fire, otherwise decay runs down on grid
+        -- steps Chance skipped and repeats are near silent when they play
+        fx.increment_repeats()
         for voice = 1, 2 do
           softcut.play(voice, 1)
           softcut.position(voice, 1)
