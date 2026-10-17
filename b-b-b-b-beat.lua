@@ -89,7 +89,6 @@ local glitch_rate = {1, 1} -- per voice playback rate multiplier from glitch
 --- States
 local is_recording = true
 local selecting_file = false
-local update_tempo = true
 local update_chance = false
 local update_stutter = false
 local is_stuttering = false
@@ -171,7 +170,6 @@ local function update()
 
     -- bang on beat as set by grid length
     if ((grid.sum * (BAR_VALS[1].ppq * 4)) % math.floor(BAR_VALS[1].ppq / BAR_VALS[grid.index].ppq)) == 0 then
-      update_tempo = not update_tempo
       grid.increment_pos(1)
       if not is_recording then
         fx.increment_repeats()
@@ -639,7 +637,9 @@ local function draw_tempo()
   local page = 0
   if (#norns.encoders.accel == 4) then screen.level(ui.ON)
   else ui.highlight({page}) end
-  ui.metro_icon(g(5), 5, update_tempo)
+  -- swings once per bar, independent of grid length
+  local is_even_bar = math.floor(clock.get_beats() / 4) % 2 == 0
+  ui.metro_icon(g(5), 5, is_even_bar)
   screen.move(g(20), g(10))
   screen.text(util.round(clock.get_tempo()))
 end
