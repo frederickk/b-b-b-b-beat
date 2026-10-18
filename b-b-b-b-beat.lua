@@ -1,3 +1,4 @@
+-- A repeater inspired by Ableton's Beat Repeat.
 --
 -- B-B-B-B-Beat
 -- 0.11.0
