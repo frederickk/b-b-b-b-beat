@@ -269,7 +269,7 @@ function UI.draw_bars(args)
   local div = args.is_detail and (args.interval_len / args.grid_len) or nil
   local interval_w = scale * args.interval_len / 4
   local offset_x = 2 + (scale * args.offset / 4)
-  local grid_w = div and (width / div) or (scale * args.grid_len / 4)
+  local grid_w = scale * args.grid_len / 4
   local label_y = args.y + args.grid.ui.height + 7
 
   -- gate length from offset, wrapping to the interval start
@@ -299,11 +299,16 @@ function UI.draw_bars(args)
   end
   args.grid.draw_span(g(2 + ((args.pos - 1) * grid_w)), g(args.y), grid_w)
 
-  -- offset marker
+  -- offset marker, label kept on screen when the offset is past halfway
   UI.highlight({args.pages.interval})
   args.grid.draw_span(g(offset_x), g(args.y), grid_w)
-  screen.move(g(offset_x), g(label_y))
-  screen.text(args.grid_label)
+  if offset_x > width / 2 then
+    screen.move(g(offset_x + grid_w), g(label_y))
+    screen.text_right(args.grid_label)
+  else
+    screen.move(g(offset_x), g(label_y))
+    screen.text(args.grid_label)
+  end
 
   return label_y
 end

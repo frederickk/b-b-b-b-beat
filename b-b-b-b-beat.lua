@@ -674,7 +674,7 @@ local PAGES = {
   },
   [3] = {
     {id = "chance", label = "Chance", signal = function() return is_repeating end},
-    {id = "variation", label = "Variation", signal = function() return update_variation end}
+    {id = "variation", label = "Vary", signal = function() return update_variation end}
   },
   [4] = {
     {id = "glitch", label = "Glitch", signal = function() return util.time() < glitch_ui_until end},
