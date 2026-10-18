@@ -17,18 +17,23 @@ For this Norns port, there are differences from the Ableton version. It's import
 
 These params are visible on the display of Norns and can be directly adjusted using the UI and knobs.
 
-| Param     | Description                                                             | Values |
-| ---- | ------------------------------------------------------------ | ---- |
-| `Tempo` | This can be set either manually or synced to sources as defined within Norns [`CLOCK` menu](https://monome.org/docs/norns/clocks/#parameters). | 1 – 300 |
-| `Interval`     | This controls how often new material is captured and starts “repeating” it. This is always synced to the song’s tempo. | 1/256 notes – 4 bars |
-| `Grid` | This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts. | 1/256 notes – 4 bars |
-| `Offset` | This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way). | 0/16 notes – 15/16 notes |
-| `Chance` | The likelihood of a repeat on each grid step. When a repeat fires, the captured slice restarts and the input is muted; when it doesn't, repeats are silent and input passes through without effect. At 100 percent every step repeats; at zero there are no repetitions. | 0 – 100% |
-| `Variation` | The likelihood (10% per step of Variation) that a grid step plays a shorter loop, so the repeat stutters faster within that step. Higher values also allow shorter loops: 1–3 halves the grid, 4–6 up to a quarter, 7–9 up to an eighth, 10 up to a sixteenth. At zero the grid size is fixed. | 0 – 10 |
-| `Glitch` | This determines the likelihood of glitching occurring and how intense the glitch effect will be. | 0 – 100% |
-| `Mode` | `Live`mode uses live audio input and `Sample` mode uses a chosen sample file (loading is done via the params menu). | `Live` or `Sample` |
-| `Mix` | Balance of dry input and repeats. At 50% both are at full level; lower values fade the repeats, higher values fade the dry input. | 0 – 100% |
-| `Input` | `Stereo` records inputs 1 and 2 to the left and right repeats. `Mono` records input 1 to both. Set in the params menu. | `Stereo` or `Mono` |
+| Page | Param | Description | Values |
+| ---- | ---- | ------------------------------------------------------------ | ---- |
+| `P0` | `Tempo` | This can be set either manually or synced to sources as defined within Norns [`CLOCK` menu](https://monome.org/docs/norns/clocks/#parameters). On Fates it's always set with `E4`. | 1 – 300 |
+| `P1` | `Interval` | This controls how often new material is captured and starts “repeating” it. This is always synced to the song’s tempo. | 1/256 notes – 4 bars |
+| `P1` | `Grid` | This controls the size of each repeated slice. Large grid values create rhythmic loops, and small values create sonic artifacts. | 1/256 notes – 4 bars |
+| `P2` | `Offset` | This shifts the record starting point, defined by given interval (1/16th notes). For example, if the interval is set to “1 bar” and offset is set to 8/16, the material will be captured for repetition once per bar on the third beat (in other words, halfway through the bar, or eight-sixteenths of the way). | 0/16 notes – 15/16 notes |
+| `P2` | `Gate` | The total length of repetitions, counted from the capture at `Offset` and including it. For example, with `Gate` at 4/16 repeats play for one beat after each capture, then stop until the next. The dotted area of the bar shows the gate; the dot next to `Gate` is filled while inside it. | 1/16 – 15/16, 1 – 4 bars (default 4 bars) |
+| `P3` | `Chance` | The likelihood of a repeat on each grid step within the gate. When a repeat fires, the captured slice restarts; when it doesn't, repeats are silent. At 100 percent every step repeats; at zero there are no repetitions. | 0 – 100% |
+| `P3` | `Variation` | The likelihood (10% per step of Variation) that a grid step plays a shorter loop, so the repeat stutters faster within that step. Higher values also allow shorter loops: 1–3 halves the grid, 4–6 up to a quarter, 7–9 up to an eighth, 10 up to a sixteenth. At zero the grid size is fixed. | 0 – 10 |
+| `P4` | `Glitch` | How often glitches happen: the chance on each clock tick (1/256 bar) that repeats jump to a random point, and on each grid step that `Glitch stutter` mutes them. | 0 – 100% |
+| `P4` | `Intensity` | How strong glitches are: the chance a glitch also changes speed (held until the next grid step), how far (up to 3 octaves faster or slower at 100%) and how often it plays backwards (up to 50%). Also sets how far the UI shakes. At 0% glitches only jump. | 0 – 100% (default 50%) |
+| `P5` | `Output` | When the dry input is heard (Beat Repeat's modes). `Mix` always passes the input with repeats on top, `Insert` mutes the input while repeats play, `Gate` only plays repeats. Shown on screen next to the speaker icon as `MX`, `IT` or `GE`. | `mix`, `insert` or `gate` (default `insert`) |
+| `P5` | `Mix` | Balance of dry input and repeats. At 50% both are at full level; lower values fade the repeats, higher values fade the dry input. | 0 – 100% |
+| `P6` | `Mode` | `Live` mode uses live audio input and `Sample` mode uses a chosen sample file, loaded with `K3` on this page or via the params menu. | `Live` or `Sample` |
+| `P6` | `Input` | `Stereo` records inputs 1 and 2 to the left and right repeats. `Mono` records input 1 to both. | `Stereo` or `Mono` |
+
+`K3` on `P3` sets `Chance` to 0% while held, on `P4` it sets `Glitch` to 100% while held.
 
 
 **Hidden params**
@@ -37,8 +42,8 @@ These params are only listed within params menu.
 
 | Param     | Description                                                             | Values |
 | ---- | ------------------------------------------------------------ | ---- |
-|  `Glitch UI` | Toggle the glitching of the UI, this causes (intended) visual glitches more frequently and “violently” as the `Glitch` param gets closer to 100 | `yes` or `no` (default `yes`) |
-|  `Glitch stutter` | Toggle an audio stutter (e.g. random muting of audio) the likelihood of stutter occuring increases based on the `Glitch` command. | `yes` or `no` |
+|  `Glitch UI` | Toggle the glitching of the UI whenever a glitch is heard; it happens more often as `Glitch` rises and more “violently” as `Intensity` rises | `yes` or `no` (default `yes`) |
+|  `Glitch stutter` | Toggle an audio stutter (e.g. random muting of repeats) the likelihood of stutter occuring increases based on the `Glitch` param. | `yes` or `no` |
 
 
 
@@ -48,17 +53,17 @@ Pitch, volume and filter shape the repeats (Softcut playback), like Beat Repeat'
 
 | Page | Param | Description | Values |
 | ---- | ---- | ------------------------------------------------------------ | ---- |
-| `P5` | `Pitch` | Pitch of repeats. Recording always happens at normal speed, so captured audio isn't warped. | -24 – +24 semitones |
-| `P5` | `Pitch decay` | Semitones added to pitch on each repeat; negative values make repeats fall in pitch (Beat Repeat's `Pitch Decay`). Resets on each new capture. | -12 – +12 semitones |
-| `P7` | `Volume` | Level of repeats. | 0 – 100% |
-| `P7` | `Volume decay` | Level lost on each repeat, repeats fade out (Beat Repeat's `Decay`). Resets on each new capture. | 0 – 100% |
-| `P9` | `Filter freq` | Center frequency of the band-pass filter. | 20 Hz – 20 kHz |
-| `P9` | `Filter width` | Width of the band-pass filter, narrow (resonant) to wide. | 1 – 100% |
+| `P7` | `Pitch` | Pitch of repeats. Recording always happens at normal speed, so captured audio isn't warped. | -24 – +24 semitones |
+| `P7` | `Pitch decay` | Semitones added to pitch on each repeat; negative values make repeats fall in pitch (Beat Repeat's `Pitch Decay`). Resets on each new capture. | -12 – +12 semitones |
+| `P9` | `Volume` | Level of repeats. | 0 – 100% |
+| `P9` | `Volume decay` | Level lost on each repeat, repeats fade out (Beat Repeat's `Decay`). Resets on each new capture. | 0 – 100% |
+| `P11` | `Filter freq` | Center frequency of the band-pass filter. | 20 Hz – 20 kHz |
+| `P11` | `Filter width` | Width of the band-pass filter, narrow (resonant) to wide. | 1 – 100% |
 | | `Filter` | Turns the band-pass filter on or off (params menu only). | `off` or `on` (default `off`) |
 
 **Modulation**
 
-Every FX param has an LFO, with rate and depth on the page after its FX (`P6`, `P8`, `P10`). Shape is set within the `REPEAT FX` params group.
+Every FX param has an LFO, with rate and depth on the page after its FX (`P8`, `P10`, `P12`). Shape is set within the `REPEAT FX` params group.
 
 | Param | Description | Values |
 | ---- | ------------------------------------------------------------ | ---- |
@@ -69,11 +74,11 @@ Every FX param has an LFO, with rate and depth on the page after its FX (`P6`, `
 
 ### Modes
 
-B-B-B-B-Beat supports both live audio and loading of samples. Changing modes can be on screen within page 4 (`P4`) using encoder 2 `E2` to change or within the params menu.
+B-B-B-B-Beat supports both live audio and loading of samples. Changing modes can be on screen within page 6 (`P6`) using encoder 2 `E2` to change or within the params menu.
 
 | Live mode | Sample mode |
 | ---- | ----------- |
-|  ![](.assets/guide/b-b-b-b-beat-mode-live.png)<br>This icon indicates that live audio mode is active and when and how long recording of material takes place is determined by `Interval`, `Grid`, and `Offset` params. | ![](.assets/guide/b-b-b-b-beat-mode-sample-unloaded.png)<br>This icon indicates that sample mode is active. Samples can be loaded via the params menu or when on page 4 (`P4`) by pressing key 3 (K3). |
+|  ![](.assets/guide/b-b-b-b-beat-mode-live.png)<br>This icon indicates that live audio mode is active and when and how long recording of material takes place is determined by `Interval`, `Grid`, and `Offset` params. | ![](.assets/guide/b-b-b-b-beat-mode-sample-unloaded.png)<br>This icon indicates that sample mode is active. Samples can be loaded via the params menu or when on page 6 (`P6`) by pressing key 3 (K3). |
 | | ![](.assets/guide/b-b-b-b-beat-mode-sample-loaded.png)<br>If a sample is loaded, a rectangle is drawn around the icon.  |
 
 
@@ -111,9 +116,11 @@ We'll configure Beat Repeat to record material once per bar and repeat the input
 | `Interval` | 1 Bar |
 | `Grid` | 1/8 Note |
 | `Offset` | 0/16 |
+| `Gate` | 1 bar |
 | `Chance` | 100% |
 | `Variation` | 0 |
 | `Glitch` | 0% |
+| `Output` | `insert` |
 
 Using the above audio input, each chord will repeat on the eigthth note. Adjusting the `Grid` param to increase the frequency of the repeats, by the given note value.  
 
@@ -134,12 +141,15 @@ and in the params menu, be sure to set `Glitch stutter` to `yes`
 | `Interval` | 1 Bar |
 | `Grid` | 1/8 Note |
 | `Offset` | 0/16 |
+| `Gate` | 1 bar |
 | `Chance` | 100% |
 | `Variation` | 0 |
 | `Glitch` | 50% |
+| `Intensity` | 50% |
 | `Glitch stutter` | yes |
+| `Output` | `insert` |
 
-Adjusting the `Glitch` param will change the frequency and intesity of glitch and stutter effects. To just  mangle audio without stutter disable `Glitch stutter`.
+Adjusting the `Glitch` param will change how often glitch and stutter effects happen, `Intensity` how wild the speed changes get. To just  mangle audio without stutter disable `Glitch stutter`.
 
 
 ### Example 3: Glitchy Madness
@@ -153,10 +163,13 @@ We'll build off of the above and add even more glitch effect. By reducing the `I
 | `Interval` | 1/2 Note |
 | `Grid` | 1/16 Note |
 | `Offset` | 0/16 |
+| `Gate` | 1 bar |
 | `Chance` | 75% |
 | `Variation` | 4 |
 | `Glitch` | 75% |
+| `Intensity` | 75% |
 | `Glitch stutter` | no |
+| `Output` | `insert` |
 
 
 ### Example 4: Offset  
@@ -165,7 +178,7 @@ For the offset example, I'm using 1 bar of 1/4 notes because it's easier to unde
 
 ![1 bar of 1/4 notes in Ableton](.assets/guide/ableton-1-bar.jpg)
 
-We'll configure the repeater to loop once per bar and repeat the recorded material every 16th note. However, we're going to tell it to record audio starting half way through the bar (hene the `Offset` setting of 8/16). With the above audio example, that means only the C3 note will be repeated. 
+We'll configure the repeater to loop once per bar and repeat the recorded material every 16th note. However, we're going to tell it to record audio starting half way through the bar (hence the `Offset` setting of 8/16). With the above audio example, that means only the C3 note will be repeated. 
 
 *Note: This example assumes you are syncing the 1st beat of B-B-B-B-Beat to 1st beat of the incoming audio. [See above](#midi) for details on syncing.*
 
@@ -178,9 +191,11 @@ We'll configure the repeater to loop once per bar and repeat the recorded materi
 | `Interval` | 1 Bar |
 | `Grid` | 1/16 Note |
 | `Offset` | 8/16 |
+| `Gate` | 1 bar |
 | `Chance` | 100% |
 | `Variation` | 0 |
 | `Glitch` | 0% |
+| `Output` | `insert` |
 
 Adjusting the `Offset` param to change the recording trigger position.
 

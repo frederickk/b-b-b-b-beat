@@ -33,32 +33,39 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 | ------- | ----------------------------- | ----------------------------------------- | ------------------------------ |
 | All     | E1                            | Change page                               |                                |
 | All     | K2                            | Resync to beat 1                          |                                |
+| All     | E4 (Fates)                    | BPM                                       | 1 - 300                        |
 |         |                               |                                           |                                |
-| 0       | E2 or E4                      | BPM                                       | 1 - 300                        |
+| 0       | E2                            | BPM (3 encoder norns)                     | 1 - 300                        |
 |         |                               |                                           |                                |
 | 1       | E2                            | Interval length                           | 1/256 - 4                      |
-| 1       | E2                            | Grid length                               | 1/256 - 4                      |
+| 1       | E3                            | Grid length                               | 1/256 - 4                      |
 |         |                               |                                           |                                |
 | 2       | E2                            | Offset amount                             | 0/16 - 15/16                   |
-| 2       | E3                            | % repeat occurrence (chance)              | 0 - 100%                       |
-| 2       | K3                            | toggle chance (temp. set 0%)              | 0%                             |
+| 2       | E3                            | Gate, total length of repeats             | 1/16 - 15/16, 1 - 4 bars       |
 |         |                               |                                           |                                |
-| 3       | E2                            | amount of Grid variance                   | 0 - 10                         |
-| 3       | E3                            | % glitch occurrence                       | 0 - 100%                       |
-| 3       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
+| 3       | E2                            | % repeat occurrence (chance)              | 0 - 100%                       |
+| 3       | E3                            | amount of Grid variance                   | 0 - 10                         |
+| 3       | K3                            | toggle chance (temp. set 0%)              | 0%                             |
 |         |                               |                                           |                                |
-| 4       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
-| 4       | E3                            | dry/wet mix (both full at 50%)            | 0 - 100%                       |
-| 4       | K3                            | load new sample                           | Any valid audio file           |
+| 4       | E2                            | % glitch occurrence (frequency)           | 0 - 100%                       |
+| 4       | E3                            | glitch intensity                          | 0 - 100%                       |
+| 4       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
 |         |                               |                                           |                                |
-| 5       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
-| 5       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
-| 7       | E2                            | volume of repeats                         | 0 - 100%                       |
-| 7       | E3                            | volume decay per repeat                   | 0 - 100%                       |
-| 9       | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
-| 9       | E3                            | band-pass filter width                    | 1 - 100%                       |
-| 6, 8, 10 | E2                           | pitch, volume, filter LFO rate            | 1/256 - 4                      |
-| 6, 8, 10 | E3                           | pitch, volume, filter LFO depth           |                                |
+| 5       | E2                            | output mode                               | `mix`, `insert` or `gate`      |
+| 5       | E3                            | dry/wet mix (both full at 50%)            | 0 - 100%                       |
+|         |                               |                                           |                                |
+| 6       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
+| 6       | E3                            | input `stereo` or `mono`                  | `stereo` or `mono`             |
+| 6       | K3                            | load new sample                           | Any valid audio file           |
+|         |                               |                                           |                                |
+| 7       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
+| 7       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
+| 9       | E2                            | volume of repeats                         | 0 - 100%                       |
+| 9       | E3                            | volume decay per repeat                   | 0 - 100%                       |
+| 11      | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
+| 11      | E3                            | band-pass filter width                    | 1 - 100%                       |
+| 8, 10, 12 | E2                          | pitch, volume, filter LFO rate            | 1/256 - 4                      |
+| 8, 10, 12 | E3                          | pitch, volume, filter LFO depth           |                                |
 
 
 ## Development
@@ -82,10 +89,14 @@ $ git merge origin/primary
 
 ## Changelog
 - v0.10.x
-    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P10`)
+    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P7` - `P12`)
     - Added pitch decay and volume decay per repeat
     - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat), each on its own page
-    - Added dry/wet `Mix` (`P4` `E3`) and `Input` stereo/mono param
+    - Added dry/wet `Mix` and `Input` stereo/mono param
+    - Added `Gate` and `Output` mode (`mix`, `insert`, `gate`), ported from the `feature-tape-in` branch
+    - Split glitch into `Glitch` (frequency) and `Intensity`; glitch speed changes hold until the next grid step
+    - Pages regrouped: `P2` offset/gate, `P3` chance/variation, `P4` glitch, `P5` output, `P6` mode/input, `P7` - `P12` FX
+    - Screen drawing moved into `lib/core/ui.lua`
     - Each page now edits two params with `E2`/`E3`, no held keys
     - `Chance` now mutes repeats on steps where it doesn't fire, so 0% is dry
     - `Variation` now plays random shorter loops (exact halvings of `Grid`) for a step, instead of jumping to 1/256
@@ -97,6 +108,7 @@ $ git merge origin/primary
     - Fixed loop length for non-48kHz samples (Softcut doesn't resample)
     - Fixed `Chance`/`Glitch` staying at 0%/100% when K3 is released on another page
     - Fixed 3 encoder norns being treated as Fates (no `P0`, no BPM control)
+    - Fixed glitches never happening on 1/256 grids (and half as often on 1/128)
     - Fixed triplet lengths (`1/96`, `1/48`, `3` bars): recording never stopped so nothing repeated, and steps fell at the wrong times
 - v0.9.x
     - Updated for latest norns firmware
