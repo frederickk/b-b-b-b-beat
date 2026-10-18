@@ -1,7 +1,7 @@
 B-B-B-B-Beat
 ---
 
-v0.10.0
+v0.11.0
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
@@ -88,15 +88,24 @@ $ git merge origin/primary
 
 
 ## Changelog
+- v0.11.x
+    - Added `Gate`: total length of repeats after each capture (`P2`), ported from the `feature-tape-in` branch
+    - Added `Output` mode `mix`, `insert` or `gate` (`P5`), ported from the `feature-tape-in` branch
+    - Split glitch into `Glitch` (frequency) and `Intensity` (`P4`); glitch speed changes hold until the next grid step
+    - Pages regrouped: `P2` offset/gate, `P3` chance/variation, `P4` glitch, `P5` output/mix, `P6` mode/input, `P7` - `P12` FX
+    - Screen drawing moved into `lib/core/ui.lua`
+    - Repeats only restart when the loop no longer lines up with the step, so steady stutters loop sample accurately instead of flamming
+    - Updated screenshots
+    - Fixed repeats being a quarter of the `Grid` length (loop length treated bars as beats)
+    - Fixed repeats and captures restarting outside the loop, which smeared the start of every repeat; Softcut crossfade now set to 5 ms
+    - Fixed the last second of samples never playing (loop now covers where the file sits in the buffer)
+    - Fixed glitches never happening on 1/256 grids (and half as often on 1/128)
+    - Fixed grid steps drawn past the end of the bar for intervals under 1 bar
 - v0.10.x
-    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P7` - `P12`)
+    - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P10`)
     - Added pitch decay and volume decay per repeat
     - Added tempo-synced LFO per FX (sine, triangle, saw, square, s&h, random per repeat), each on its own page
-    - Added dry/wet `Mix` and `Input` stereo/mono param
-    - Added `Gate` and `Output` mode (`mix`, `insert`, `gate`), ported from the `feature-tape-in` branch
-    - Split glitch into `Glitch` (frequency) and `Intensity`; glitch speed changes hold until the next grid step
-    - Pages regrouped: `P2` offset/gate, `P3` chance/variation, `P4` glitch, `P5` output, `P6` mode/input, `P7` - `P12` FX
-    - Screen drawing moved into `lib/core/ui.lua`
+    - Added dry/wet `Mix` (`P4` `E3`) and `Input` stereo/mono param
     - Each page now edits two params with `E2`/`E3`, no held keys
     - `Chance` now mutes repeats on steps where it doesn't fire, so 0% is dry
     - `Variation` now plays random shorter loops (exact halvings of `Grid`) for a step, instead of jumping to 1/256
@@ -108,12 +117,6 @@ $ git merge origin/primary
     - Fixed loop length for non-48kHz samples (Softcut doesn't resample)
     - Fixed `Chance`/`Glitch` staying at 0%/100% when K3 is released on another page
     - Fixed 3 encoder norns being treated as Fates (no `P0`, no BPM control)
-    - Fixed glitches never happening on 1/256 grids (and half as often on 1/128)
-    - Fixed repeats being a quarter of the `Grid` length (loop length treated bars as beats)
-    - Fixed repeats and captures restarting outside the loop, which smeared the start of every repeat; Softcut crossfade now set to 5 ms
-    - Repeats only restart when the loop no longer lines up with the step, so steady stutters loop sample accurately instead of flamming
-    - Fixed the last second of samples never playing (loop now covers where the file sits in the buffer)
-    - Fixed grid steps drawn past the end of the bar for intervals under 1 bar
     - Fixed triplet lengths (`1/96`, `1/48`, `3` bars): recording never stopped so nothing repeated, and steps fell at the wrong times
 - v0.9.x
     - Updated for latest norns firmware

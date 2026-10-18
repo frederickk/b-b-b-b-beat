@@ -1,6 +1,6 @@
 --
 -- B-B-B-B-Beat
--- 0.10.0
+-- 0.11.0
 -- llllllll.co/t/35047
 --
 -- K2    Resync to beat 1
@@ -21,7 +21,7 @@
 --
 
 --- constants
-local VERSION = "0.10.0"
+local VERSION = "0.11.0"
 
 local BAR_VALS = {
   { str = "1/256", value = 1 / 256 }, -- [1]
