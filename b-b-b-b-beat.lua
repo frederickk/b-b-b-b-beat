@@ -74,6 +74,10 @@ local GLITCH_UI_HOLD = 0.1
 -- Max glitch speed change in octaves (+/-), at 100% intensity
 local GLITCH_MAX_OCTAVES = 3
 
+-- Softcut crossfade at loop wraps and position changes, short enough to keep
+-- repeat attacks crisp; never more than a quarter of the loop
+local FADE_TIME = 0.005
+
 -- Index of BAR_VALS that triggers detail view (1 bar)
 local BAR_VALS_DETAIL_RES = 11 
 
@@ -107,6 +111,8 @@ local is_recording = true
 local selecting_file = false
 local is_repeating = false -- Chance fired on current grid step
 local is_in_gate = true -- within Gate length of the last capture
+local is_wet_continuous = false -- repeats looped through the last step unbroken
+local is_glitch_moved = false -- a glitch moved the playhead during this step
 local dry_level_prev
 local glitch_ui_until = 0 -- util.time() the screen glitch ends
 local loop_index -- index of BAR_VALS the Softcut loop is set to
@@ -129,13 +135,23 @@ local function rand_occurrence(param_pct, val)
   return bool_val
 end
 
+--- Returns buffer position (seconds) the loop starts at: samples are read
+-- into the buffer at 1 s, live audio is recorded from 0.
+local function loop_start_pos()
+  return tape_len > 0 and 1 or 0
+end
+
 --- Sets loop length based on grid length and tempo.
 -- @tparam index {number}  Optional index of BAR_VALS; default grid length
 local function set_loop_len(index)
   loop_index = index or grid.index or 1
   if tape_len <= 0 then -- changing loop length of a loaded sample, stops the sample from playing
-    loop_len = (BAR_VALS[loop_index].value / clock.get_tempo()) * 60
+    -- BAR_VALS are in bars of 4 beats
+    loop_len = BAR_VALS[loop_index].value * 4 * 60 / clock.get_tempo()
     for voice = 1, 2 do
+      -- set explicitly, Softcut keeps whatever the last script used
+      softcut.fade_time(voice, math.min(FADE_TIME, loop_len / 4))
+      softcut.loop_start(voice, 0)
       softcut.loop_end(voice, loop_len)
     end
   end
@@ -235,7 +251,7 @@ local function start_rec()
   fx.reset_repeats()
 
   for voice = 1, 2 do
-    softcut.position(voice, 1)
+    softcut.position(voice, loop_start_pos())
     softcut.rec_level(voice, 1)
   end
 end
@@ -281,7 +297,8 @@ local function update()
       if update_variation then
         index = vary_index(index, math.ceil(vari / 3))
       end
-      if index ~= loop_index then
+      local is_loop_changed = index ~= loop_index
+      if is_loop_changed then
         set_loop_len(index)
       end
 
@@ -293,11 +310,20 @@ local function update()
         -- count only repeats that fire, otherwise decay runs down on grid
         -- steps Chance skipped and repeats are near silent when they play
         fx.increment_repeats()
-        for voice = 1, 2 do
-          softcut.play(voice, 1)
-          softcut.position(voice, 1)
+
+        -- a loop of one grid step already wraps on the step, sample accurate;
+        -- restarting it again from the clock lands a few ms late and flams.
+        -- Restart only when the loop no longer lines up with the step.
+        local is_shifted = math.abs(fx.pitch(clock.get_beats())) > 0.01
+        if tape_len > 0 or not is_wet_continuous or is_loop_changed or is_glitch_moved or is_shifted then
+          for voice = 1, 2 do
+            softcut.play(voice, 1)
+            softcut.position(voice, loop_start_pos())
+          end
         end
       end
+      is_wet_continuous = is_repeating or is_recording
+      is_glitch_moved = false
       apply_dry()
 
       is_stuttering = (params:get("glitch_stutter") == 1 and update_stutter)
@@ -314,9 +340,10 @@ local function update()
         glitch_ui_until = util.time() + GLITCH_UI_HOLD
       end
       local intensity = params:get("glitch_intensity") / 100
+      is_glitch_moved = true
       for voice = 1, 2 do
         softcut.play(voice, 1)
-        softcut.position(voice, (math.random() * loop_len))
+        softcut.position(voice, loop_start_pos() + (math.random() * loop_len))
         if math.random() < intensity then
           glitch_rate[voice] = glitch_speed(intensity)
         end
@@ -421,7 +448,7 @@ local function init_softcut()
       set_loop_len()
     end
 
-    softcut.position(voice, 1) -- voice 1 loop position @ 0.0s
+    softcut.position(voice, loop_start_pos())
     softcut.pre_level(voice, 1) -- voice 1 overdub level
     softcut.rec_level(voice, 1) -- voice 1 record level
     softcut.rec(voice, 1) -- voice 1 enable record
@@ -490,10 +517,14 @@ local function load_file(file)
     end
     init_softcut()
 
+    -- the file sits at 1 s in the buffer, loop over exactly that
     for voice = 1, 2 do
-      softcut.loop_end(voice, tape_len)
+      softcut.fade_time(voice, FADE_TIME)
+      softcut.loop_start(voice, loop_start_pos())
+      softcut.loop_end(voice, loop_start_pos() + tape_len)
+      softcut.position(voice, loop_start_pos())
     end
-    
+
     loop_len = tape_len
   end
 end

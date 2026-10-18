@@ -109,6 +109,11 @@ $ git merge origin/primary
     - Fixed `Chance`/`Glitch` staying at 0%/100% when K3 is released on another page
     - Fixed 3 encoder norns being treated as Fates (no `P0`, no BPM control)
     - Fixed glitches never happening on 1/256 grids (and half as often on 1/128)
+    - Fixed repeats being a quarter of the `Grid` length (loop length treated bars as beats)
+    - Fixed repeats and captures restarting outside the loop, which smeared the start of every repeat; Softcut crossfade now set to 5 ms
+    - Repeats only restart when the loop no longer lines up with the step, so steady stutters loop sample accurately instead of flamming
+    - Fixed the last second of samples never playing (loop now covers where the file sits in the buffer)
+    - Fixed grid steps drawn past the end of the bar for intervals under 1 bar
     - Fixed triplet lengths (`1/96`, `1/48`, `3` bars): recording never stopped so nothing repeated, and steps fell at the wrong times
 - v0.9.x
     - Updated for latest norns firmware

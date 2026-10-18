@@ -199,6 +199,27 @@ We'll configure the repeater to loop once per bar and repeat the recorded materi
 
 Adjusting the `Offset` param to change the recording trigger position.
 
+
+### Example 5: Clear Stutter
+
+A classic stutter fill: once per bar, the 16th note on beat 4 is captured and repeated for the rest of that beat. `Gate` at 4/16 stops the repeats after one beat, so the other three beats pass through untouched. With no glitch or variation every repeat is an exact copy, on the grid.
+
+This is saved as the `clear stutter` PSET (slot 2) in `PARAMETERS > PSET`.
+
+| Param     | Value     |
+| --------- | --------- |
+| `Interval` | 1 Bar |
+| `Grid` | 1/16 Note |
+| `Offset` | 12/16 |
+| `Gate` | 4/16 |
+| `Chance` | 100% |
+| `Variation` | 0 |
+| `Glitch` | 0% |
+| `Output` | `insert` |
+| `Mix` | 50% |
+
+For a faster roll set `Grid` to 1/32; for a stutter on every beat set `Interval` to 1/4 Note and `Gate` to its maximum. Adding `Volume decay` (`P9`) fades the repeats out, `Pitch decay` (`P7`) makes them rise or fall.
+
 ---
 
 ## Additional references
