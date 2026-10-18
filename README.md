@@ -1,7 +1,7 @@
 B-B-B-B-Beat
 ---
 
-v0.10.0
+v0.11.0
 
 A repeater inspired by [Ableton's Beat Repeat](https://www.ableton.com/en/blog/guide-beat-repeat-quantize-courses/) for [Norns](https://monome.org/norns), with some added glitchy inspiration from [MASF Possessed](https://www.youtube.com/results?search_query=masf+possessed)/[MWFX Judder](https://www.youtube.com/results?search_query=mwfx+judder).
 
@@ -33,32 +33,39 @@ Params be controled with Midi CC via `MAP` within params menu. For a detailed ov
 | ------- | ----------------------------- | ----------------------------------------- | ------------------------------ |
 | All     | E1                            | Change page                               |                                |
 | All     | K2                            | Resync to beat 1                          |                                |
+| All     | E4 (Fates)                    | BPM                                       | 1 - 300                        |
 |         |                               |                                           |                                |
-| 0       | E2 or E4                      | BPM                                       | 1 - 300                        |
+| 0       | E2                            | BPM (3 encoder norns)                     | 1 - 300                        |
 |         |                               |                                           |                                |
 | 1       | E2                            | Interval length                           | 1/256 - 4                      |
-| 1       | E2                            | Grid length                               | 1/256 - 4                      |
+| 1       | E3                            | Grid length                               | 1/256 - 4                      |
 |         |                               |                                           |                                |
 | 2       | E2                            | Offset amount                             | 0/16 - 15/16                   |
-| 2       | E3                            | % repeat occurrence (chance)              | 0 - 100%                       |
-| 2       | K3                            | toggle chance (temp. set 0%)              | 0%                             |
+| 2       | E3                            | Gate, total length of repeats             | 1/16 - 15/16, 1 - 4 bars       |
 |         |                               |                                           |                                |
-| 3       | E2                            | amount of Grid variance                   | 0 - 10                         |
-| 3       | E3                            | % glitch occurrence                       | 0 - 100%                       |
-| 3       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
+| 3       | E2                            | % repeat occurrence (chance)              | 0 - 100%                       |
+| 3       | E3                            | amount of Grid variance                   | 0 - 10                         |
+| 3       | K3                            | toggle chance (temp. set 0%)              | 0%                             |
 |         |                               |                                           |                                |
-| 4       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
-| 4       | E3                            | dry/wet mix (both full at 50%)            | 0 - 100%                       |
-| 4       | K3                            | load new sample                           | Any valid audio file           |
+| 4       | E2                            | % glitch occurrence (frequency)           | 0 - 100%                       |
+| 4       | E3                            | glitch intensity                          | 0 - 100%                       |
+| 4       | K3                            | toggle glitch effect (temp. set 100%)     | 100%                           |
 |         |                               |                                           |                                |
-| 5       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
-| 5       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
-| 7       | E2                            | volume of repeats                         | 0 - 100%                       |
-| 7       | E3                            | volume decay per repeat                   | 0 - 100%                       |
-| 9       | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
-| 9       | E3                            | band-pass filter width                    | 1 - 100%                       |
-| 6, 8, 10 | E2                           | pitch, volume, filter LFO rate            | 1/256 - 4                      |
-| 6, 8, 10 | E3                           | pitch, volume, filter LFO depth           |                                |
+| 5       | E2                            | output mode                               | `mix`, `insert` or `gate`      |
+| 5       | E3                            | dry/wet mix (both full at 50%)            | 0 - 100%                       |
+|         |                               |                                           |                                |
+| 6       | E2                            | change mode `live` or `sample`            | `live` or `sample`             |
+| 6       | E3                            | input `stereo` or `mono`                  | `stereo` or `mono`             |
+| 6       | K3                            | load new sample                           | Any valid audio file           |
+|         |                               |                                           |                                |
+| 7       | E2                            | pitch of repeats                          | -24 - +24 semitones            |
+| 7       | E3                            | pitch decay per repeat                    | -12 - +12 semitones            |
+| 9       | E2                            | volume of repeats                         | 0 - 100%                       |
+| 9       | E3                            | volume decay per repeat                   | 0 - 100%                       |
+| 11      | E2                            | band-pass filter frequency                | 20 Hz - 20 kHz                 |
+| 11      | E3                            | band-pass filter width                    | 1 - 100%                       |
+| 8, 10, 12 | E2                          | pitch, volume, filter LFO rate            | 1/256 - 4                      |
+| 8, 10, 12 | E3                          | pitch, volume, filter LFO depth           |                                |
 
 
 ## Development
@@ -81,6 +88,19 @@ $ git merge origin/primary
 
 
 ## Changelog
+- v0.11.x
+    - Added `Gate`: total length of repeats after each capture (`P2`), ported from the `feature-tape-in` branch
+    - Added `Output` mode `mix`, `insert` or `gate` (`P5`), ported from the `feature-tape-in` branch
+    - Split glitch into `Glitch` (frequency) and `Intensity` (`P4`); glitch speed changes hold until the next grid step
+    - Pages regrouped: `P2` offset/gate, `P3` chance/variation, `P4` glitch, `P5` output/mix, `P6` mode/input, `P7` - `P12` FX
+    - Screen drawing moved into `lib/core/ui.lua`
+    - Repeats only restart when the loop no longer lines up with the step, so steady stutters loop sample accurately instead of flamming
+    - Updated screenshots
+    - Fixed repeats being a quarter of the `Grid` length (loop length treated bars as beats)
+    - Fixed repeats and captures restarting outside the loop, which smeared the start of every repeat; Softcut crossfade now set to 5 ms
+    - Fixed the last second of samples never playing (loop now covers where the file sits in the buffer)
+    - Fixed glitches never happening on 1/256 grids (and half as often on 1/128)
+    - Fixed grid steps drawn past the end of the bar for intervals under 1 bar
 - v0.10.x
     - Added repeat FX: pitch (+/-24 st), volume and band-pass filter (pages `P5` - `P10`)
     - Added pitch decay and volume decay per repeat
